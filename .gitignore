@@ -1,0 +1,37 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+
+# Tauri / Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+target/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Local data (never commit user data)
+*.local
+.env
+.env.local
+
+# Private assets (QR codes etc - keep local but never push)
+frontend/assets/qr-*.png
+
+# Tauri build output (large)
+*.msi
+*.exe
+*.app
+*.dmg
+src-tauri/target/release/

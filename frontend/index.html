@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>TodoCalendar</title>
+<link rel="stylesheet" href="css/style.css">
+<script src="js/lib/lunar.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <!-- 顶部栏 -->
+  <header class="topbar">
+    <div class="brand"><i data-icon="calendar"></i> TodoCalendar</div>
+    <div class="stats" id="stats">— 待办 · — 完成</div>
+    <div class="actions">
+      <div id="timeClock" class="time-clock" title="当前时间">
+        <span class="time-clock-date"></span>
+        <span class="time-clock-sep"></span>
+        <span class="time-clock-hm"></span>
+      </div>
+      <button id="btnBulkMode" class="icon-btn" title="批量操作"><i data-icon="checkSquare"></i></button>
+      <button id="btnNewTree" class="btn ghost" title="批量创建多个父待办及其子待办"><i data-icon="list"></i> 批量新建</button>
+      <button id="btnNew" class="btn primary"><i data-icon="plus"></i> 新建待办</button>
+      <button id="btnHelp" class="icon-btn" title="帮助"><i data-icon="help"></i></button>
+      <div class="dropdown-wrap">
+        <button id="btnMenu" class="icon-btn" title="设置"><i data-icon="settings"></i></button>
+        <!-- 方案 A: 下拉菜单 -->
+        <div class="dropdown" id="dropdown" hidden>
+          <div class="dropdown-group-label">数据</div>
+          <div class="dropdown-item" data-action="openHistory"><span class="label"><i data-icon="archive"></i>归档记录</span></div>
+          <div class="dropdown-item" data-action="exportJson"><span class="label"><i data-icon="upload"></i>导出 JSON 备份</span></div>
+          <div class="dropdown-item" data-action="importJson"><span class="label"><i data-icon="download"></i>导入 JSON</span></div>
+          <div class="dropdown-item" data-action="openDataDir"><span class="label"><i data-icon="folderOpen"></i>打开数据目录</span></div>
+          <div class="dropdown-separator"></div>
+
+          <div class="dropdown-group-label">外观</div>
+          <div class="submenu-wrap">
+            <div class="dropdown-item">
+              <span class="label"><i data-icon="sun"></i>主题</span>
+              <span class="value" id="ddThemeValue">浅色</span><span class="arrow"><i data-icon="chevronRight"></i></span>
+              <div class="submenu">
+                <div class="dropdown-item" data-action="theme_light"><span class="label"><i data-icon="sun"></i>浅色</span></div>
+                <div class="dropdown-item" data-action="theme_dark"><span class="label"><i data-icon="moon"></i>深色</span></div>
+                <div class="dropdown-item" data-action="theme_system"><span class="label"><i data-icon="monitor"></i>跟随系统</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="submenu-wrap">
+            <div class="dropdown-item">
+              <span class="label"><i data-icon="type"></i>字体大小</span>
+              <span class="value" id="ddFontValue">中</span><span class="arrow"><i data-icon="chevronRight"></i></span>
+              <div class="submenu">
+                <div class="dropdown-item" data-action="font_small"><span class="label">小</span></div>
+                <div class="dropdown-item" data-action="font_medium"><span class="label">中</span></div>
+                <div class="dropdown-item" data-action="font_medium_large"><span class="label">较大</span></div>
+                <div class="dropdown-item" data-action="font_large"><span class="label">大</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="submenu-wrap">
+            <div class="dropdown-item">
+              <span class="label"><i data-icon="calendar"></i>每周第一天</span>
+              <span class="value" id="ddWeekValue">周一</span><span class="arrow"><i data-icon="chevronRight"></i></span>
+              <div class="submenu">
+                <div class="dropdown-item" data-action="week_monday"><span class="label">周一</span></div>
+                <div class="dropdown-item" data-action="week_sunday"><span class="label">周日</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="dropdown-separator"></div>
+
+          <div class="dropdown-item" data-action="openSettings"><span class="label"><i data-icon="settings"></i>更多设置...</span></div>
+          <div class="dropdown-item" data-action="about"><span class="label"><i data-icon="info"></i>关于</span><span class="value" id="ddVersionValue">v0.1.0</span></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 批量操作栏(进入批量模式时显示) -->
+  <div class="bulk-action-bar" id="bulkActionBar" hidden>
+    <button id="btnBulkExit" class="btn ghost" title="退出批量模式"><i data-icon="x"></i> 取消</button>
+    <span class="bulk-count">已选 <strong id="bulkSelectedCount">0</strong> 项</span>
+    <button id="btnBulkSelectAll" class="btn ghost">全选</button>
+    <button id="btnBulkSelectDone" class="btn ghost">全选已完成</button>
+    <button id="btnBulkSelectNone" class="btn ghost">全不选</button>
+    <span class="bulk-spacer"></span>
+    <button id="btnBulkEdit" class="btn primary" disabled><i data-icon="pencil"></i> 修改</button>
+    <button id="btnBulkArchive" class="btn archive" disabled><i data-icon="archive"></i> 归档</button>
+    <button id="btnBulkDelete" class="btn danger" disabled><i data-icon="trash"></i> 删除</button>
+  </div>
+
+  <!-- 分组栏(开启分组时显示) -->
+  <div class="group-bar" id="groupBar" hidden>
+    <div class="group-tabs" id="groupTabs"></div>
+    <button class="group-add" id="btnGroupAdd" title="新建分组">+</button>
+  </div>
+
+  <!-- 上半部分:列表 -->
+  <section class="list-section">
+    <div class="list-header">
+      <span class="list-title"><i data-icon="list"></i> 待办列表</span>
+      <div class="list-tools">
+        <button id="btnToggleExpand" class="icon-btn list-tool-btn" title="折叠全部" aria-label="折叠全部"><i data-icon="chevronsUp"></i></button>
+        <div class="dropdown-wrap list-sort-wrap">
+          <button id="btnSort" class="icon-btn list-tool-btn" title="自动排序：截止日期由近到远" aria-label="选择排序方式" aria-haspopup="menu" aria-expanded="false"><i data-icon="arrowDownWideNarrow"></i></button>
+          <div class="dropdown sort-dropdown" id="sortDropdown" role="menu" hidden>
+            <div class="dropdown-group-label">排序方式</div>
+            <div class="dropdown-item" data-sort-mode="auto" role="menuitemradio">
+              <span class="label"><i data-icon="arrowDownWideNarrow"></i>自动：截止日期由近到远</span>
+              <span class="sort-check"><i data-icon="check"></i></span>
+            </div>
+            <div class="dropdown-item" data-sort-mode="manual" role="menuitemradio">
+              <span class="label"><i data-icon="gripVertical"></i>手动排序</span>
+              <span class="sort-check"><i data-icon="check"></i></span>
+            </div>
+          </div>
+        </div>
+        <label class="check-label">
+          <input type="checkbox" id="hideDone"> 隐藏已完成
+        </label>
+      </div>
+    </div>
+    <div class="tree" id="tree"></div>
+  </section>
+
+  <!-- 下半部分:日历 -->
+  <section class="calendar-section">
+    <div class="cal-header">
+      <div class="cal-nav">
+        <button type="button" id="prevMonth" class="icon-btn" title="上月"><i data-icon="chevronLeft"></i></button>
+        <span id="monthLabel" class="month-label">2026 年 7 月</span>
+        <button type="button" id="nextMonth" class="icon-btn" title="下月"><i data-icon="chevronRight"></i></button>
+        <button type="button" id="todayBtn" class="btn ghost">今天</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </section>
+</div>
+
+<!-- 日视图:覆盖整个应用 -->
+<div class="day-view" id="dayView" hidden>
+  <div class="day-view-inner">
+    <div class="day-view-header">
+      <button id="dayBack" class="btn ghost"><i data-icon="chevronLeft"></i> 返回日历</button>
+      <div class="day-view-title">
+        <span id="dayTitle"></span>
+        <span id="dayMeta" class="day-view-meta"></span>
+      </div>
+      <button id="dayToggleExpand" class="btn ghost" title="折叠/展开全部"><i data-icon="chevronsDown"></i></button>
+      <button id="dayAdd" class="btn primary"><i data-icon="plus"></i> 添加当日</button>
+    </div>
+    <div class="day-view-body" id="dayBody"></div>
+  </div>
+</div>
+
+<!-- 归档记录:覆盖整个应用 -->
+<div class="history-view" id="historyView" hidden>
+  <div class="history-view-inner">
+    <div class="history-header">
+      <button id="historyBack" class="btn ghost"><i data-icon="chevronLeft"></i> 返回日历</button>
+      <div class="history-title">
+        <span>归档记录</span>
+        <span id="historyMeta" class="history-meta"></span>
+      </div>
+      <label class="history-search">
+        <i data-icon="search"></i>
+        <input id="historySearch" type="search" placeholder="搜索标题或层级路径" autocomplete="off">
+      </label>
+      <button id="btnHistoryCollapseAll" class="btn ghost" title="折叠/展开全部子代办">全部折叠</button>
+      <button id="btnHistoryRangeDelete" class="btn ghost" title="删除指定归档时间区间的归档">按时间删除</button>
+      <button id="btnHistoryDeleteAll" class="btn danger" title="永久删除所有归档">全部删除</button>
+    </div>
+    <div class="history-body" id="historyBody"></div>
+  </div>
+</div>
+
+<!-- 分组创建/重命名弹窗 -->
+<div class="modal-mask" id="groupEditMask" hidden>
+  <div class="modal">
+    <h3 id="groupEditTitle">新建分组</h3>
+    <label>分组名称
+      <input type="text" id="fGroupName" placeholder="分组名称" autocomplete="off">
+    </label>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnGroupEditCancel" class="btn ghost">取消</button>
+      <button id="btnGroupEditSave" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 归档记录:按时间删除弹窗 -->
+<div class="modal-mask" id="rangeDeleteMask" hidden>  <div class="modal">
+    <h3>按时间删除归档</h3>
+    <label>时间字段
+      <select id="rangeField">
+        <option value="archived">归档时间</option>
+        <option value="completed">完成时间</option>
+      </select>
+    </label>
+    <label>起始日期
+      <input type="date" id="rangeStart">
+    </label>
+    <label>结束日期
+      <input type="date" id="rangeEnd">
+    </label>
+    <div class="bulk-count" id="rangeCount">符合条件的归档:0 项</div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnRangeCancel" class="btn ghost">取消</button>
+      <button id="btnRangeConfirm" class="btn danger">永久删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 批量修改弹窗 -->
+<div class="modal-mask" id="bulkEditMask" hidden>
+  <div class="modal">
+    <h3>批量修改 <span id="bulkEditCount">0</span> 项</h3>
+    <p style="font-size:11px;color:var(--muted);margin:4px 0 12px">勾选字段才会应用到选中待办,未勾选保持原值</p>
+
+    <div class="bulk-edit-field">
+      <input type="checkbox" id="beChkStart">
+      <label for="beChkStart" class="bulk-edit-label">开始时间</label>
+      <div class="input-wrap">
+        <input type="date" id="beFStart">
+        <div class="picker-overlay" data-target="beFStart"></div>
+      </div>
+      <button type="button" id="beBtnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+    </div>
+
+    <div class="bulk-edit-field">
+      <input type="checkbox" id="beChkEnd">
+      <label for="beChkEnd" class="bulk-edit-label">结束时间</label>
+      <div class="input-wrap">
+        <input type="date" id="beFEnd">
+        <div class="picker-overlay" data-target="beFEnd"></div>
+      </div>
+      <button type="button" id="beBtnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+    </div>
+
+    <div class="bulk-edit-field">
+      <input type="checkbox" id="beChkDone">
+      <label for="beChkDone" class="bulk-edit-label">完成状态</label>
+      <select id="beFDone">
+        <option value="false">未完成</option>
+        <option value="true">已完成</option>
+      </select>
+    </div>
+
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnBulkEditCancel" class="btn ghost">取消</button>
+      <button id="btnBulkEditSave" class="btn primary">应用</button>
+    </div>
+  </div>
+</div>
+
+<!-- 归档记录:全部删除确认弹窗 -->
+<div class="modal-mask" id="deleteAllMask" hidden>
+  <div class="modal">
+    <h3>永久删除全部归档</h3>
+    <div class="confirm-message" id="deleteAllMessage">将永久删除所有归档,此操作无法恢复。</div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnDeleteAllCancel" class="btn ghost">取消</button>
+      <button id="btnDeleteAllConfirm" class="btn danger">永久删除</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑弹窗 -->
+<div class="modal-mask" id="modalMask" hidden>
+  <div class="modal">
+    <h3 id="modalTitle">新建待办</h3>
+    <label>标题
+      <input type="text" id="fTitle" placeholder="想做什么?">
+    </label>
+    <label>
+      <div class="field-label-row">
+        <span>开始时间</span>
+        <span class="auto-time-badge" id="fStartAutoBadge" hidden title="由子代办自动同步">↺</span>
+      </div>
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="date" id="fStart">
+          <div class="picker-overlay" data-target="fStart"></div>
+        </div>
+        <button type="button" id="btnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <label>
+      <div class="field-label-row">
+        <span>结束时间</span>
+        <span class="auto-time-badge" id="fEndAutoBadge" hidden title="由子代办自动同步">↺</span>
+      </div>
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="date" id="fEnd">
+          <div class="picker-overlay" data-target="fEnd"></div>
+        </div>
+        <button type="button" id="btnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <label>父级
+      <select id="fParent"><option value="">(顶层)</option></select>
+    </label>
+    <div class="modal-actions">
+      <button id="btnDelete" class="btn danger" hidden>删除</button>
+      <button id="btnArchive" class="btn archive" hidden><i data-icon="archive"></i> 立即归档</button>
+      <span class="spacer"></span>
+      <button id="btnCancel" class="btn ghost">取消</button>
+      <button id="btnSave" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="bulkMask" hidden>
+  <div class="modal">
+    <h3 id="bulkTitle">批量添加子代办</h3>
+    <label>每行一个标题
+      <textarea id="fBulkTitles" rows="8" placeholder="写大纲&#10;写初稿&#10;校对&#10;发布"></textarea>
+    </label>
+    <label>开始时间
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="datetime-local" id="fBulkStart">
+          <div class="picker-overlay" data-target="fBulkStart"></div>
+        </div>
+        <button type="button" id="btnBulkStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <label>结束时间
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="datetime-local" id="fBulkEnd">
+          <div class="picker-overlay" data-target="fBulkEnd"></div>
+        </div>
+        <button type="button" id="btnBulkEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <div class="bulk-count" id="bulkCount">将创建 0 个待办</div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnBulkCancel" class="btn ghost">取消</button>
+      <button id="btnBulkSave" class="btn primary">创建</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="bulkTreeMask" hidden>
+  <div class="modal">
+    <h3>批量新建待办树</h3>
+    <label>用缩进表示层级(2 空格或 Tab)
+      <textarea id="fTreeTitles" rows="10" placeholder="项目A&#10;  需求调研&#10;  方案设计&#10;    技术选型&#10;项目B&#10;  起步"></textarea>
+    </label>
+    <label>开始时间
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="date" id="fTreeStart">
+          <div class="picker-overlay" data-target="fTreeStart"></div>
+        </div>
+        <button type="button" id="btnTreeStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <label>结束时间
+      <div class="time-row">
+        <div class="input-wrap">
+          <input type="date" id="fTreeEnd">
+          <div class="picker-overlay" data-target="fTreeEnd"></div>
+        </div>
+        <button type="button" id="btnTreeEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+      </div>
+    </label>
+    <div class="bulk-count" id="treeCount">将创建 0 个待办 · 0 棵树</div>
+    <div class="modal-actions">
+      <span class="spacer"></span>
+      <button id="btnTreeCancel" class="btn ghost">取消</button>
+      <button id="btnTreeSave" class="btn primary">创建</button>
+    </div>
+  </div>
+</div>
+
+<!-- Help Modal (关于 + 反馈 + 检查更新) -->
+<div class="modal-mask" id="helpMask" hidden>
+  <div class="modal help-modal">
+    <button class="icon-btn help-close" id="btnCloseHelp" title="关闭"><i data-icon="x"></i></button>
+    <div class="help-head">
+      <div class="help-logo" id="helpLogo"></div>
+      <div class="help-name">TodoCalendar</div>
+      <div class="help-ver" id="helpVersion">— · MIT</div>
+    </div>
+    <div class="help-sec">
+      <div class="help-sec-t">检查更新</div>
+      <div class="help-update checking" id="helpUpdateBox">
+        <span id="helpUpdateText">正在检查...</span>
+      </div>
+    </div>
+    <div class="help-sec">
+      <div class="help-sec-t">关于</div>
+      <div class="help-row"><span>运行环境</span><span id="helpEnv">Tauri · Windows</span></div>
+      <div class="help-row"><span>开源协议</span><span>MIT</span></div>
+    </div>
+    <div class="help-sec">
+      <div class="help-sec-t">反馈</div>
+      <div class="help-links">
+        <button type="button" class="help-link" data-help-link="issue" id="helpLinkIssue"></button>
+        <button type="button" class="help-link" data-help-link="appreciate" id="helpLinkAppreciate"></button>
+        <button type="button" class="help-link" data-help-link="star" id="helpLinkStar"></button>
+        <button type="button" class="help-link" data-help-link="readme" id="helpLinkReadme"></button>
+      </div>
+    </div>
+    <div class="help-foot">© 2026 xuananrocx</div>
+  </div>
+</div>
+
+<!-- Appreciate Modal -->
+<div class="modal-mask" id="appreciateMask" hidden>
+  <div class="modal appreciate-modal">
+    <button class="icon-btn help-close" id="btnCloseAppreciate" title="关闭"><i data-icon="x"></i></button>
+    <div class="appreciate-title">赞赏作者</div>
+    <div class="appreciate-body">
+      <img class="appreciate-qr" src="assets/qr-wechat.png" alt="微信赞赏码">
+      <div class="appreciate-msg">如果觉得好用,可以赞赏支持一下作者</div>
+    </div>
+  </div>
+</div>
+
+<!-- 方案 B: 设置 Modal (内容由 main.js 动态渲染到 #settingsContent) -->
+<div class="modal-mask" id="settingsMask" hidden>
+  <div class="modal settings-modal">
+    <div class="settings-head">
+      <span class="settings-title">设置</span>
+      <button class="icon-btn" id="btnCloseSettings" title="关闭"><i data-icon="x"></i></button>
+    </div>
+    <div class="settings-body">
+      <nav class="settings-nav">
+        <div class="settings-nav-item active" data-tab="appearance"><i data-icon="sun"></i>外观</div>
+        <div class="settings-nav-item" data-tab="calendar"><i data-icon="calendar"></i>日历</div>
+        <div class="settings-nav-item" data-tab="behavior"><i data-icon="zap"></i>行为</div>
+        <div class="settings-nav-item" data-tab="data"><i data-icon="database"></i>数据</div>
+        <div class="settings-nav-item" data-tab="about"><i data-icon="info"></i>关于</div>
+      </nav>
+      <div class="settings-content" id="settingsContent"></div>
+    </div>
+    <div class="settings-foot">
+      <span class="settings-hint">改动即时生效</span>
+      <div class="settings-actions">
+        <button class="btn ghost" id="btnResetSettings">重置默认</button>
+        <button class="btn primary" id="btnDoneSettings">完成</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 应用内确认弹窗 -->
+<div class="modal-mask confirm-mask" id="confirmMask" hidden>
+  <div class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="confirm-heading">
+      <span class="confirm-icon" id="confirmIcon"><i data-icon="info"></i></span>
+      <h3 id="confirmTitle">确认操作</h3>
+    </div>
+    <p id="confirmMessage" class="confirm-message"></p>
+    <div class="modal-actions confirm-actions">
+      <span class="spacer"></span>
+      <button id="btnConfirmCancel" class="btn ghost">取消</button>
+      <button id="btnConfirmAccept" class="btn primary">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 应用内输入弹窗(分组新建/编辑) -->
+<div class="modal-mask prompt-mask" id="promptMask" hidden>
+  <div class="modal prompt-modal" role="dialog" aria-modal="true" aria-labelledby="promptTitle">
+    <h3 id="promptTitle">输入</h3>
+    <input type="text" id="promptInput" class="prompt-input" autocomplete="off" />
+    <div class="modal-actions prompt-actions">
+      <button id="btnPromptDelete" class="btn ghost danger" hidden>删除分组</button>
+      <span class="spacer"></span>
+      <button id="btnPromptCancel" class="btn ghost">取消</button>
+      <button id="btnPromptAccept" class="btn primary">确认</button>
+    </div>
+  </div>
+</div>
+
+<!-- 月份快速选择 -->
+<div class="month-picker-popover" id="monthPickerPopover" hidden>
+  <div class="month-picker-header">
+    <button type="button" class="icon-btn" id="mpPrevYear" title="上一年"><i data-icon="chevronLeft"></i></button>
+    <span class="month-picker-year" id="mpYearLabel">2026 年</span>
+    <button type="button" class="icon-btn" id="mpNextYear" title="下一年"><i data-icon="chevronRight"></i></button>
+  </div>
+  <div class="month-picker-grid" id="mpMonthGrid"></div>
+  <div class="month-picker-actions">
+    <button type="button" class="btn ghost" id="mpToday">今天</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn ghost" id="mpClose">关闭</button>
+  </div>
+</div>
+
+<script src="js/icons.js"></script>
+<script src="js/api.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
