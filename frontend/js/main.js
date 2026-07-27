@@ -967,12 +967,6 @@ const Main = {
   closeHelp() {
     document.getElementById('helpMask').hidden = true;
   },
-  openAppreciate() {
-    document.getElementById('appreciateMask').hidden = false;
-  },
-  closeAppreciate() {
-    document.getElementById('appreciateMask').hidden = true;
-  },
   openMonthPicker() {
     this._mpYear = this.state.calMonth.getFullYear();
     this._renderMonthPicker();
@@ -1850,7 +1844,6 @@ const Main = {
     const repo = 'xuananrocx/todocalendar';
     const helpLinks = [
       { id: 'helpLinkIssue',      icon: Icon.bug(),  label: '新建 Issue',  url: `https://github.com/${repo}/issues/new`, external: true },
-      { id: 'helpLinkAppreciate', icon: Icon.heart(), label: '赞赏作者',  url: null, external: false },
       { id: 'helpLinkStar',       icon: Icon.star(), label: '给个 Star',  url: `https://github.com/${repo}`, external: true },
       { id: 'helpLinkReadme',     icon: Icon.bookOpen(), label: 'README', url: `https://github.com/${repo}#readme`, external: true },
     ];
@@ -1863,8 +1856,6 @@ const Main = {
         el.onclick = (e) => { e.preventDefault(); this.openAppreciate(); };
       }
     }
-    document.getElementById('btnCloseAppreciate').onclick = () => this.closeAppreciate();
-    document.getElementById('appreciateMask').onclick = (e) => { if (e.target.id === 'appreciateMask') this.closeAppreciate(); };
 
     const btnToggleExpand = document.getElementById('btnToggleExpand');
     btnToggleExpand.onclick = () => this.toggleAllExpanded();
