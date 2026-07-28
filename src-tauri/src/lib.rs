@@ -101,6 +101,7 @@ pub struct Settings {
     pub auto_sync_start: bool,
     pub auto_sync_end: bool,
     pub calendar_child_display: String, // current | main-only | main-child | child-main
+    pub close_on_outside_click: bool,
 }
 
 impl Default for Settings {
@@ -146,6 +147,7 @@ impl Default for Settings {
             auto_sync_start: false,
             auto_sync_end: false,
             calendar_child_display: "main-only".into(),
+            close_on_outside_click: true,
         }
     }
 }

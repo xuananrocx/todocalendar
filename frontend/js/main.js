@@ -1245,6 +1245,22 @@ const Main = {
     </div>`;
   },
 
+  _attachMaskClose(maskId, closeCallback) {
+    const mask = document.getElementById(maskId);
+    if (!mask) return;
+    let mouseDownOnMask = false;
+    mask.addEventListener('mousedown', (e) => {
+      if (e.target === mask) mouseDownOnMask = true;
+    });
+    mask.addEventListener('mouseup', (e) => {
+      const onMask = e.target === mask && mouseDownOnMask;
+      mouseDownOnMask = false;
+      if (onMask && this.state?.settings?.closeOnOutsideClick !== false) {
+        closeCallback();
+      }
+    });
+  },
+
   _settingsTabHtml(tab, s) {
     if (tab === 'appearance') {
       return `
@@ -1430,6 +1446,7 @@ const Main = {
         <div class="settings-row">${this._toggle(s.showSingleAdd !== false, 'showSingleAdd', '单个添加子代办', '在父待办行显示 + 按钮,关闭后仅保留批量入口')}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
         <div class="settings-row">${this._toggle(s.deleteConfirm !== false, 'deleteConfirm', '删除前确认', '默认已开启,关闭后直接删除')}</div>
+        <div class="settings-row">${this._toggle(s.closeOnOutsideClick !== false, 'closeOnOutsideClick', '点击外部关闭弹窗', '点击遮罩空白处关闭弹窗;仅在按下和松开都在外部时触发(防止从内部拖到外部误触)')}</div>
         <div class="settings-row">${this._toggle(!!s.autoSyncStart, 'autoSyncStart', '父代办开始随子代办更新', '新建/修改子代办时间时,父代办的开始时间自动取所有子代办中最早的')}</div>
         <div class="settings-row">${this._toggle(!!s.autoSyncEnd, 'autoSyncEnd', '父代办结束随子代办更新', '新建/修改子代办时间时,父代办的结束时间自动取所有子代办中最晚的')}</div>
         <div class="settings-row" style="padding:6px 10px;background:var(--hover-bg);border-radius:6px;font-size:11px;color:var(--muted);line-height:1.5">开启后,父代办时间会被强制覆盖;想保留独立时间请关闭开关。被同步过的父代办在编辑器里显示 ↺ 自动同步 标记。</div>
@@ -1741,14 +1758,10 @@ const Main = {
     document.getElementById('rangeStart').oninput = () => this._refreshRangeCount();
     document.getElementById('rangeEnd').oninput = () => this._refreshRangeCount();
     document.getElementById('rangeField').onchange = () => this._refreshRangeCount();
-    document.getElementById('rangeDeleteMask').onclick = (e) => {
-      if (e.target.id === 'rangeDeleteMask') this.closeRangeDeleteModal();
-    };
     document.getElementById('btnDeleteAllCancel').onclick = () => this.closeDeleteAllModal();
     document.getElementById('btnDeleteAllConfirm').onclick = () => this.confirmDeleteAll();
-    document.getElementById('deleteAllMask').onclick = (e) => {
-      if (e.target.id === 'deleteAllMask') this.closeDeleteAllModal();
-    };
+    this._attachMaskClose('rangeDeleteMask', () => this.closeRangeDeleteModal());
+    this._attachMaskClose('deleteAllMask', () => this.closeDeleteAllModal());
 
     // 弹窗
     document.getElementById('btnCancel').onclick = () => this.closeModal();
@@ -1795,16 +1808,12 @@ const Main = {
       });
     });
     this._installAllDateDisplays();
-    document.getElementById('modalMask').onclick = (e) => {
-      if (e.target.id === 'modalMask') this.closeModal();
-    };
+    this._attachMaskClose('modalMask', () => this.closeModal());
 
     // 批量弹窗
     document.getElementById('btnBulkCancel').onclick = () => this.closeBulkModal();
     document.getElementById('btnBulkSave').onclick = () => this.saveBulkModal();
-    document.getElementById('bulkMask').onclick = (e) => {
-      if (e.target.id === 'bulkMask') this.closeBulkModal();
-    };
+    this._attachMaskClose('bulkMask', () => this.closeBulkModal());
     const fBulkTitles = document.getElementById('fBulkTitles');
     if (fBulkTitles) {
       fBulkTitles.oninput = () => this._refreshBulkCount();
@@ -1813,9 +1822,7 @@ const Main = {
     // 批量新建树
     document.getElementById('btnTreeCancel').onclick = () => this.closeBulkTreeModal();
     document.getElementById('btnTreeSave').onclick = () => this.saveBulkTreeModal();
-    document.getElementById('bulkTreeMask').onclick = (e) => {
-      if (e.target.id === 'bulkTreeMask') this.closeBulkTreeModal();
-    };
+    this._attachMaskClose('bulkTreeMask', () => this.closeBulkTreeModal());
     const fTreeTitles = document.getElementById('fTreeTitles');
     if (fTreeTitles) {
       fTreeTitles.oninput = () => this._refreshTreeCount();
@@ -1850,7 +1857,7 @@ const Main = {
     const btnHelp = document.getElementById('btnHelp');
     btnHelp.onclick = (e) => { e.stopPropagation(); this.openHelp(); };
     document.getElementById('btnCloseHelp').onclick = () => this.closeHelp();
-    document.getElementById('helpMask').onclick = (e) => { if (e.target.id === 'helpMask') this.closeHelp(); };
+    this._attachMaskClose('helpMask', () => this.closeHelp());
     const repo = 'xuananrocx/todocalendar';
     const helpLinks = [
       { id: 'helpLinkIssue',      icon: Icon.bug(),  label: '新建 Issue',  url: `https://github.com/${repo}/issues/new`, external: true },
@@ -1903,23 +1910,17 @@ const Main = {
     document.getElementById('btnCloseSettings').onclick = () => this.closeSettingsModal();
     document.getElementById('btnDoneSettings').onclick = () => this.closeSettingsModal();
     document.getElementById('btnResetSettings').onclick = () => this.resetSettings();
-    document.getElementById('settingsMask').onclick = (e) => {
-      if (e.target.id === 'settingsMask') this.closeSettingsModal();
-    };
+    this._attachMaskClose('settingsMask', () => this.closeSettingsModal());
 
     document.getElementById('btnConfirmCancel').onclick = () => this.closeConfirm(false);
     document.getElementById('btnConfirmAccept').onclick = () => this.closeConfirm(true);
-    document.getElementById('confirmMask').onclick = (e) => {
-      if (e.target.id === 'confirmMask') this.closeConfirm(false);
-    };
+    this._attachMaskClose('confirmMask', () => this.closeConfirm(false));
 
     const promptInput = document.getElementById('promptInput');
     document.getElementById('btnPromptCancel').onclick = () => this.closePrompt({ type: 'cancel', value: '' });
     document.getElementById('btnPromptAccept').onclick = () => this.closePrompt({ type: 'submit', value: promptInput.value });
     document.getElementById('btnPromptDelete').onclick = () => this.closePrompt({ type: 'delete', value: promptInput.value });
-    document.getElementById('promptMask').onclick = (e) => {
-      if (e.target.id === 'promptMask') this.closePrompt({ type: 'cancel', value: '' });
-    };
+    this._attachMaskClose('promptMask', () => this.closePrompt({ type: 'cancel', value: '' }));
     promptInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
