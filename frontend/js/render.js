@@ -766,6 +766,11 @@ const Render = {
       if (c.other) cell.classList.add('other-month');
       if (Render.sameDay(c.date, today)) cell.classList.add('today');
       if (state.dayViewDate && Render.sameDay(c.date, state.dayViewDate)) cell.classList.add('selected');
+      const wc = state.settings?.weekendColor;
+      if (wc && wc !== 'none') {
+        const dow = c.date.getDay();
+        if (dow === 0 || dow === 6) cell.classList.add('weekend', wc);
+      }
 
       // 周数角标(每行第一个)
       if (showWeekNum && idx % 7 === 0) {

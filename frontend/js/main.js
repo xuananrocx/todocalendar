@@ -1390,6 +1390,21 @@ const Main = {
           ], s.calendarChildDisplay || 'main-only', 'calendarChildDisplay')}
           <div class="settings-row-desc">子代办在日历中的展示方式:显示主名将子代办合并到主代办名下(不展示子代办自己的事件条);不展示子完全隐藏子代办事件;名拼接主-子/子-主格式显示每个子代办自己的事件条并附带主代办名</div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">周末窗格颜色</div>
+          <div class="color-picker" data-onchange="weekendColor">
+            ${this._colorSwatch('none', '无', '#ffffff', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('yellow', '浅黄', '#fef3c7', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('blue', '浅蓝', '#dbeafe', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.weekendColor || 'none')}
+            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.weekendColor || 'none')}
+          </div>
+          <div class="settings-row-desc">给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)</div>
+        </div>
         <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
         <div class="settings-row">
           <div class="settings-row-label">当天开始事件条颜色</div>

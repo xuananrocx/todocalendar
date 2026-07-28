@@ -102,6 +102,7 @@ pub struct Settings {
     pub auto_sync_end: bool,
     pub calendar_child_display: String, // current | main-only | main-child | child-main
     pub close_on_outside_click: bool,
+    pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
 }
 
 impl Default for Settings {
@@ -148,6 +149,7 @@ impl Default for Settings {
             auto_sync_end: false,
             calendar_child_display: "main-only".into(),
             close_on_outside_click: true,
+            weekend_color: "none".into(),
         }
     }
 }
