@@ -149,7 +149,7 @@ impl Default for Settings {
             auto_sync_end: false,
             calendar_child_display: "main-only".into(),
             close_on_outside_click: true,
-            weekend_color: "none".into(),
+            weekend_color: "beige".into(),
         }
     }
 }
