@@ -795,6 +795,7 @@ const Render = {
           if (hit.kind === 'start' && state.settings?.showStartInCalendar === false) continue;
           if (hit.kind === 'ongoing' && state.settings?.showOngoingInCalendar === false) continue;
           if (hit.kind === 'end' && state.settings?.showEndInCalendar === false) continue;
+          if (hit.todo.id !== entry.root.id && hit.todo.done) continue;
           const key = `${entry.root.id}-${hit.kind}`;
           const isRootTodo = hit.todo.id === entry.root.id;
           const existing = dedupMap.get(key);
@@ -831,8 +832,8 @@ const Render = {
         const { root, hit } = entry;
         const ev = document.createElement('div');
         ev.className = `cal-event interval-${hit.kind}`;
-        if (hit.todo.done) ev.classList.add('done');
-        const isOverdue = Render.isOverdue(hit.todo, today);
+        if (root.done) ev.classList.add('done');
+        const isOverdue = Render.isOverdue(root, today);
 
         let prefix = '进行中 ';
         if (hit.kind === 'start') {
