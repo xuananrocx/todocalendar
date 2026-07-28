@@ -785,7 +785,8 @@ const Render = {
       }
 
       const dayEntries = Render.getRootDayEntries(state, c.date);
-      // 按 (rootId, kind) 去重,优先 root 自己的 hit
+      const childMode = state.settings?.calendarChildDisplay || 'main-only';
+      const visibleHits = [];
       const dedupMap = new Map();
       for (const entry of dayEntries) {
         if (state.settings?.showCalendarDone === false && Render.allDescendantsDone(byParent, entry.root)) {
@@ -796,15 +797,26 @@ const Render = {
           if (hit.kind === 'ongoing' && state.settings?.showOngoingInCalendar === false) continue;
           if (hit.kind === 'end' && state.settings?.showEndInCalendar === false) continue;
           if (hit.todo.id !== entry.root.id && hit.todo.done) continue;
-          const key = `${entry.root.id}-${hit.kind}`;
-          const isRootTodo = hit.todo.id === entry.root.id;
-          const existing = dedupMap.get(key);
-          if (!existing || (!existing.isRootTodo && isRootTodo)) {
-            dedupMap.set(key, { root: entry.root, hit, isRootTodo });
+          if (childMode === 'main-only') {
+            if (hit.todo.id !== entry.root.id) continue;
+            visibleHits.push({ root: entry.root, hit });
+          } else if (childMode === 'current') {
+            const key = `${entry.root.id}-${hit.kind}`;
+            const isRootTodo = hit.todo.id === entry.root.id;
+            const existing = dedupMap.get(key);
+            if (!existing || (!existing.isRootTodo && isRootTodo)) {
+              dedupMap.set(key, { root: entry.root, hit, isRootTodo });
+            }
+          } else {
+            visibleHits.push({ root: entry.root, hit });
           }
         }
       }
-      const visibleHits = Array.from(dedupMap.values()).map(v => ({ root: v.root, hit: v.hit }));
+      if (childMode === 'current') {
+        for (const v of dedupMap.values()) {
+          visibleHits.push({ root: v.root, hit: v.hit });
+        }
+      }
       visibleHits.sort((a, b) =>
         Render.compareDayHits(a.hit, b.hit)
         || String(a.root.id).localeCompare(String(b.root.id))
@@ -835,6 +847,13 @@ const Render = {
         if (root.done) ev.classList.add('done');
         const isOverdue = Render.isOverdue(root, today);
 
+        const isRootHit = hit.todo.id === root.id;
+        let displayTitle = root.title;
+        if (!isRootHit) {
+          if (childMode === 'main-child') displayTitle = `${root.title}--${hit.todo.title}`;
+          else if (childMode === 'child-main') displayTitle = `${hit.todo.title}--${root.title}`;
+        }
+
         let prefix = '进行中 ';
         if (hit.kind === 'start') {
           const showTime = Render.showTimePrecision && (hit.start.getHours() !== 0 || hit.start.getMinutes() !== 0);
@@ -849,12 +868,12 @@ const Render = {
           tag.textContent = '⚠ 已过期 ';
           ev.appendChild(tag);
           const title = document.createElement('span');
-          title.textContent = prefix + root.title;
+          title.textContent = prefix + displayTitle;
           ev.appendChild(title);
-          ev.title = `⚠ 已过期 ${prefix}${root.title}`;
+          ev.title = `⚠ 已过期 ${prefix}${displayTitle}`;
         } else {
-          ev.textContent = prefix + root.title;
-          ev.title = `${prefix}${root.title}`;
+          ev.textContent = prefix + displayTitle;
+          ev.title = `${prefix}${displayTitle}`;
         }
         cell.appendChild(ev);
       }

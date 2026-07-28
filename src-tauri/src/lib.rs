@@ -100,6 +100,7 @@ pub struct Settings {
     pub start_event_custom_color: String,   // amber | blue | ... (when mode=custom)
     pub auto_sync_start: bool,
     pub auto_sync_end: bool,
+    pub calendar_child_display: String, // current | main-only | main-child | child-main
 }
 
 impl Default for Settings {
@@ -144,6 +145,7 @@ impl Default for Settings {
             start_event_custom_color: "slate".into(),
             auto_sync_start: false,
             auto_sync_end: false,
+            calendar_child_display: "main-only".into(),
         }
     }
 }

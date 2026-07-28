@@ -1364,6 +1364,16 @@ const Main = {
         <div class="settings-row">${this._toggle(s.showOngoingInCalendar !== false, 'showOngoingInCalendar', '显示进行中任务', '仅在跨天任务的中间日期显示(开始与截止同一天的任务不显示进行中)')}</div>
         <div class="settings-row">${this._toggle(s.showEndInCalendar !== false, 'showEndInCalendar', '显示截止任务', '在月历中显示任务的截止日期(同一天的开始/结束时间相同时也会显示)')}</div>
         <div class="settings-row">${this._toggle(s.showCalendarDone === true, 'showCalendarDone', '显示已完成任务', '在月历中显示已完成的待办(日详情页不受影响)')}</div>
+        <div class="settings-row">
+          <div class="settings-row-label">子节点展示方式</div>
+          ${this._seg([
+            {value:'current',label:'显示主名'},
+            {value:'main-only',label:'不展示子'},
+            {value:'main-child',label:'名拼接主-子'},
+            {value:'child-main',label:'名拼接子-主'}
+          ], s.calendarChildDisplay || 'main-only', 'calendarChildDisplay')}
+          <div class="settings-row-desc">子代办在日历中的展示方式:显示主名将子代办合并到主代办名下(不展示子代办自己的事件条);不展示子完全隐藏子代办事件;名拼接主-子/子-主格式显示每个子代办自己的事件条并附带主代办名</div>
+        </div>
         <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
         <div class="settings-row">
           <div class="settings-row-label">当天开始事件条颜色</div>
