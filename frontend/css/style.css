@@ -27,6 +27,8 @@
   --overdue: #ef4444;
   --deadline-urgent-bg: #fee2e2;
   --deadline-urgent-text: #dc2626;
+  --deadline-overdue-bg: #fee2e2;
+  --deadline-overdue-text: #7f1d1d;
   --deadline-warning-bg: #fef3c7;
   --deadline-warning-text: #b45309;
   --deadline-safe-bg: #dcfce7;
@@ -603,6 +605,11 @@ body.bulk-mode .drag-handle { display: none; }
 .time-tag.deadline-urgent {
   background: var(--deadline-urgent-bg);
   color: var(--deadline-urgent-text);
+}
+.time-tag.deadline-overdue {
+  background: var(--deadline-overdue-bg);
+  color: var(--deadline-overdue-text);
+  font-weight: 700;
 }
 .time-tag.deadline-warning {
   background: var(--deadline-warning-bg);

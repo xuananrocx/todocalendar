@@ -229,6 +229,7 @@ const Render = {
     const deadline = Render.getDeadline(t);
     if (!deadline) return '';
     const remaining = deadline.getTime() - now.getTime();
+    if (remaining < 0) return 'deadline-overdue';
     if (remaining <= 24 * 60 * 60 * 1000) return 'deadline-urgent';
     if (remaining <= 48 * 60 * 60 * 1000) return 'deadline-warning';
     return 'deadline-safe';
