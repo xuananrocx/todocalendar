@@ -103,6 +103,7 @@ pub struct Settings {
     pub calendar_child_display: String, // current | main-only | main-child | child-main
     pub close_on_outside_click: bool,
     pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
+    pub stats_style: String, // text | chip | ring
 }
 
 impl Default for Settings {
@@ -150,6 +151,7 @@ impl Default for Settings {
             calendar_child_display: "main-only".into(),
             close_on_outside_click: true,
             weekend_color: "beige".into(),
+            stats_style: "text".into(),
         }
     }
 }
@@ -356,7 +358,7 @@ fn restore_archived_branch(data: &mut Data, id: &str) -> Result<Vec<String>, Str
         .find(|todo| todo.id == id)
         .ok_or_else(|| "归档待办不存在".to_string())?;
     if selected.archived_at.is_none() {
-        return Err("该待办不在历史记录中".into());
+        return Ok(Vec::new());
     }
 
     let mut restore_ids = collect_descendants(&data.todos, id);

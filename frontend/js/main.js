@@ -118,7 +118,13 @@ const Main = {
       await API.restoreArchived(id);
       await Promise.all([this.reload(), this.loadHistory()]);
     } catch (e) {
-      alert('恢复失败:' + window.__tauriErrMsg(e));
+      await this.confirmAction({
+        title: '恢复失败',
+        messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
+        confirmText: '知道了',
+        hideCancel: true,
+        danger: true,
+      });
     }
   },
 
@@ -1415,6 +1421,13 @@ const Main = {
         <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示图标')}</div>
         <div class="settings-row">${this._toggle(!!s.showNumbering, 'showNumbering', '显示任务编号', '按当前顺序编号,父待办显示子任务数')}</div>
         <div class="settings-row">${this._toggle(s.showTimePrecision === true, 'showTimePrecision', '显示具体时间', '开启后所有时间显示精确到分钟,关闭则只显示日期')}</div>
+        <div class="settings-row">
+          <label class="settings-row-label">统计样式</label>
+          ${this._seg([
+            {value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'ring',label:'进度环'}
+          ], s.statsStyle || 'text', 'statsStyle')}
+          <div class="settings-row-desc">顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度环可视化完成比例</div>
+        </div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>
           ${this._seg([

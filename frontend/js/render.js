@@ -709,7 +709,41 @@ const Render = {
     const total = state.todos.length;
     const done = state.todos.filter(t => t.done).length;
     const overdue = state.todos.filter(t => Render.isOverdue(t)).length;
-    stats.textContent = `${total} 待办 · ${done} 完成${overdue ? ` · ${overdue} 过期` : ''}`;
+    const inProgress = total - done - overdue;
+    const style = (state.settings && state.settings.statsStyle) || 'text';
+    stats.className = `stats stats-${style}`;
+    stats.textContent = '';
+    if (style === 'chip') {
+      const chip = (label, num, cls) => {
+        const el = document.createElement('span');
+        el.className = `stats-chip ${cls}`;
+        el.innerHTML = `<span class="stats-chip-label">${label}</span><span class="stats-chip-num">${num}</span>`;
+        return el;
+      };
+      stats.appendChild(chip('待办', total, 'stats-chip-total'));
+      stats.appendChild(chip('完成', done, 'stats-chip-done'));
+      if (inProgress > 0) stats.appendChild(chip('进行中', inProgress, 'stats-chip-doing'));
+      if (overdue > 0) stats.appendChild(chip('过期', overdue, 'stats-chip-over'));
+      return;
+    }
+    if (style === 'ring') {
+      const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+      const ring = document.createElement('div');
+      ring.className = 'stats-ring';
+      ring.style.background = `conic-gradient(
+        var(--stats-done) 0% ${pct}%,
+        var(--stats-doing) ${pct}% ${pct + Math.round((inProgress / Math.max(total, 1)) * 100)}%,
+        var(--stats-over) ${pct + Math.round((inProgress / Math.max(total, 1)) * 100)}% 100%
+      )`;
+      ring.innerHTML = `<div class="stats-ring-inner">${pct}%</div>`;
+      stats.appendChild(ring);
+      const txt = document.createElement('span');
+      txt.className = 'stats-ring-text';
+      txt.innerHTML = `完成 ${done} · 进行中 ${inProgress}${overdue ? ` · 过期 ${overdue}` : ''}`;
+      stats.appendChild(txt);
+      return;
+    }
+    stats.textContent = `${total} 待办 · ${done} 完成${inProgress > 0 ? ` · ${inProgress} 进行中` : ''}${overdue ? ` · ${overdue} 过期` : ''}`;
   },
 
   renderCalendar(state) {
@@ -932,7 +966,7 @@ const Render = {
     document.getElementById('dayTitle').textContent =
       `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
     document.getElementById('dayMeta').textContent =
-      `${total} 组待办 · ${done} 完成${overdue ? ` · ${overdue} 过期` : ''}`;
+      `${total} 组待办 · ${done} 完成${(total - done - overdue) > 0 ? ` · ${total - done - overdue} 进行中` : ''}${overdue ? ` · ${overdue} 过期` : ''}`;
 
     const body = document.getElementById('dayBody');
     body.innerHTML = '';
