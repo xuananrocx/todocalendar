@@ -162,7 +162,7 @@ impl Default for Settings {
             stats_style: "text".into(),
             clock_show_seconds: false,
             holiday_color: "none".into(),
-            holiday_auto_update: true,
+            holiday_auto_update: false,
             holiday_last_update: None,
         }
     }
