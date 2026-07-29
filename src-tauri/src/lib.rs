@@ -103,7 +103,7 @@ pub struct Settings {
     pub calendar_child_display: String, // current | main-only | main-child | child-main
     pub close_on_outside_click: bool,
     pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
-    pub stats_style: String, // text | chip | ring
+    pub stats_style: String, // text | chip | bar
 }
 
 impl Default for Settings {

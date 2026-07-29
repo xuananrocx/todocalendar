@@ -726,21 +726,25 @@ const Render = {
       if (overdue > 0) stats.appendChild(chip('过期', overdue, 'stats-chip-over'));
       return;
     }
-    if (style === 'ring') {
+    if (style === 'bar') {
       const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-      const ring = document.createElement('div');
-      ring.className = 'stats-ring';
-      ring.style.background = `conic-gradient(
-        var(--stats-done) 0% ${pct}%,
-        var(--stats-doing) ${pct}% ${pct + Math.round((inProgress / Math.max(total, 1)) * 100)}%,
-        var(--stats-over) ${pct + Math.round((inProgress / Math.max(total, 1)) * 100)}% 100%
-      )`;
-      ring.innerHTML = `<div class="stats-ring-inner">${pct}%</div>`;
-      stats.appendChild(ring);
-      const txt = document.createElement('span');
-      txt.className = 'stats-ring-text';
-      txt.innerHTML = `完成 ${done} · 进行中 ${inProgress}${overdue ? ` · 过期 ${overdue}` : ''}`;
-      stats.appendChild(txt);
+      const doingPct = total > 0 ? Math.round((inProgress / total) * 100) : 0;
+      const overPct = total > 0 ? Math.round((overdue / total) * 100) : 0;
+      const bar = document.createElement('div');
+      bar.className = 'stats-bar';
+      bar.innerHTML = `
+        <div class="stats-bar-track"></div>
+        <div class="stats-bar-text">
+          <span class="stats-bar-pct">${pct}%</span>
+          <span class="stats-bar-legend">
+            <span><i style="background:var(--stats-done)"></i>完成 ${done}</span>
+            <span><i style="background:var(--stats-doing)"></i>进行 ${inProgress}</span>
+            ${overdue ? `<span><i style="background:var(--stats-over)"></i>过期 ${overdue}</span>` : ''}
+          </span>
+        </div>
+      `;
+      bar.title = `待办共 ${total} 项\n✓ 完成 ${done}\n◐ 进行中 ${inProgress}${overdue ? `\n⚠ 过期 ${overdue}` : ''}`;
+      stats.appendChild(bar);
       return;
     }
     stats.textContent = `${total} 待办 · ${done} 完成${inProgress > 0 ? ` · ${inProgress} 进行中` : ''}${overdue ? ` · ${overdue} 过期` : ''}`;

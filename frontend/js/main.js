@@ -1424,9 +1424,9 @@ const Main = {
         <div class="settings-row">
           <label class="settings-row-label">统计样式</label>
           ${this._seg([
-            {value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'ring',label:'进度环'}
+            {value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'bar',label:'进度条'}
           ], s.statsStyle || 'text', 'statsStyle')}
-          <div class="settings-row-desc">顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度环可视化完成比例</div>
+          <div class="settings-row-desc">顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例</div>
         </div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>

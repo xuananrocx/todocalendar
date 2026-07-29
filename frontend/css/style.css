@@ -81,13 +81,21 @@ body {
   padding: 10px 14px;
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  position: relative;
+  z-index: 1;
 }
+.topbar > * { position: relative; z-index: 1; }
 .brand { font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
 .stats { color: var(--muted); font-size: 12px; }
-.stats-chip, .stats-ring { display: inline-flex; align-items: center; gap: 6px; }
+.stats.stats-chip, .stats.stats-bar {
+  display: inline-flex; align-items: center; gap: 8px;
+  width: max-content;
+}
 .stats-chip {
   padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600;
-  margin-right: 4px; border: 1px solid transparent;
+  border: 1px solid transparent;
+  display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap;
 }
 .stats-chip-num { font-weight: 700; }
 .stats-chip-total { background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); }
@@ -95,22 +103,55 @@ body {
 .stats-chip-doing { background: color-mix(in srgb, #f59e0b 18%, transparent); color: #b45309; }
 .stats-chip-over { background: color-mix(in srgb, var(--overdue) 16%, transparent); color: var(--overdue); }
 
-.stats-ring {
-  width: 28px; height: 28px; border-radius: 50%;
-  vertical-align: middle; margin-right: 8px;
+.stats-bar {
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 200px;
+  max-width: 260px;
+  margin-left: 8px;
 }
-.stats-ring-inner {
-  width: 20px; height: 20px; background: var(--panel);
-  border-radius: 50%; margin: 4px auto;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 700; color: var(--text);
+.stats-bar-track {
+  height: 4px;
+  background: linear-gradient(to right, #f1f5f9 0%, #e2e8f0 20%, #cbd5e1 40%, #94a3b8 60%, #64748b 80%, #475569 100%);
+  border-radius: 2px;
+  overflow: hidden;
 }
-.stats-ring-text { font-size: 11px; color: var(--muted); vertical-align: middle; }
+.stats-bar-seg {
+  height: 100%;
+  transition: width .3s ease;
+}
+.stats-bar-text {
+  display: flex;
+  align-items: center;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 6px;
+  white-space: nowrap;
+}
+.stats-bar-pct { font-weight: 700; color: var(--text); margin-right: 16px; }
+.stats-bar-legend {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  margin-left: auto;
+}
+.stats-bar-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stats-bar-legend i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
 
 :root {
-  --stats-done: #10b981;
-  --stats-doing: #f59e0b;
-  --stats-over: var(--overdue);
+  --stats-done: #cbd5e1;
+  --stats-doing: #94a3b8;
+  --stats-over: #475569;
 }
 .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .time-clock {
