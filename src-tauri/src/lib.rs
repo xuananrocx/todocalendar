@@ -272,7 +272,7 @@ async fn fetch_year_holidays(
     total_steps: usize,
 ) -> Result<HolidaysData, String> {
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(20))
+        .timeout(std::time::Duration::from_secs(10))
         .build()
         .map_err(|e| e.to_string())?;
     let urls = [
@@ -365,7 +365,7 @@ async fn fetch_year_holidays(
                 let elapsed = t0.elapsed().as_millis();
                 let is_timeout = e.is_timeout();
                 last_err = if is_timeout {
-                    "连接超时(20s)".to_string()
+                    "连接超时(10s)".to_string()
                 } else {
                     let msg = e.to_string();
                     if msg.contains("dns") || msg.contains("resolve") {

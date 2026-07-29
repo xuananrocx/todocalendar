@@ -1475,11 +1475,11 @@ const Main = {
     </div>`;
   },
 
-  _colorSwatch(value, label, from, to, currentValue) {
+  _colorSwatch(value, label, from, to, currentValue, pattern) {
     const active = value === currentValue;
     const bg = to ? `linear-gradient(135deg, ${from}, ${to})` : from;
     return `<div class="color-swatch ${active ? 'active' : ''}" data-value="${value}" title="${label}">
-      <span class="color-dot" style="background:${bg}"></span>
+      <span class="color-dot" style="background:${bg};position:relative;overflow:hidden">${pattern || ''}</span>
       <span class="color-name">${label}</span>
     </div>`;
   },
@@ -1674,12 +1674,12 @@ const Main = {
           <div class="settings-row-label">法定假日窗格颜色</div>
           <div class="color-picker" data-onchange="holidayColor">
             ${this._colorSwatch('none', '无', '#ffffff', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('yellow', '浅黄', '#fef3c7', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('blue', '浅蓝', '#dbeafe', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('flag', '国旗', '#de2910', null, s.holidayColor || 'none', '<svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice"><polygon fill="#ffde00" points="5,2 5.67,4.07 7.85,4.07 6.09,5.35 6.76,7.43 5,6.15 3.24,7.43 3.91,5.35 2.15,4.07 4.33,4.07"/><polygon fill="#ffde00" transform="rotate(-120.96 10 2)" points="10,1 10.23,1.69 10.95,1.69 10.36,2.12 10.59,2.81 10,2.38 9.41,2.81 9.64,2.12 9.05,1.69 9.78,1.69"/><polygon fill="#ffde00" transform="rotate(-98.13 12 4)" points="12,3 12.23,3.69 12.95,3.69 12.36,4.12 12.59,4.81 12,4.38 11.41,4.81 11.64,4.12 11.05,3.69 11.78,3.69"/><polygon fill="#ffde00" transform="rotate(-74.05 12 7)" points="12,6 12.23,6.69 12.95,6.69 12.36,7.12 12.59,7.81 12,7.38 11.41,7.81 11.64,7.12 11.05,6.69 11.78,6.69"/><polygon fill="#ffde00" transform="rotate(-51.34 10 9)" points="10,8 10.23,8.69 10.95,8.69 10.36,9.12 10.59,9.81 10,9.38 9.41,9.81 9.64,9.12 9.05,8.69 9.78,8.69"/></svg>')}
+            ${this._colorSwatch('china', '中国红', '#de2910', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('brocade', '锦绣', '#fca5a5', '#fbbf24', s.holidayColor || 'none')}
+            ${this._colorSwatch('firework', '烟花', '#fef3c7', '#fb7185', s.holidayColor || 'none')}
             ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('glow', '霞光', '#fed7aa', '#fb7185', s.holidayColor || 'none')}
             ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.holidayColor || 'none')}
             ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.holidayColor || 'none')}
           </div>

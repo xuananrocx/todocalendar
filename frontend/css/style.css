@@ -435,58 +435,54 @@ body.bulk-mode .drag-handle { display: none; }
               linear-gradient(135deg, #34d399, #22d3ee) border-box;
 }
 [data-theme="dark"] .cal-cell.weekend.aurora .cal-date { color: #a7f3d0; }
-.cal-cell.holiday.yellow { background: #fef3c7; }
-.cal-cell.holiday.pink { background: #fce7f3; }
-.cal-cell.holiday.blue { background: #dbeafe; }
-.cal-cell.holiday.green { background: #d1fae5; }
 .cal-cell.holiday.beige { background: #fafaf9; }
-.cal-cell.holiday.peach { background: #ffedd5; }
+.cal-cell.holiday.china { background: #de2910; }
+.cal-cell.holiday.brocade { background: linear-gradient(135deg, #fca5a5 0%, #fbbf24 100%); }
+.cal-cell.holiday.firework { background: linear-gradient(135deg, #fef3c7 0%, #fbbf24 30%, #fb7185 65%, #c084fc 100%); }
+.cal-cell.holiday.glow { background: linear-gradient(135deg, #fed7aa 0%, #fb7185 100%); }
 .cal-cell.holiday.dawn { background: linear-gradient(135deg, #fef3c7, #fce7f3); }
 .cal-cell.holiday.aurora { background: linear-gradient(135deg, #f0fdf4, #ecfeff); }
-.cal-cell.holiday.yellow .cal-date { color: #b45309; }
-.cal-cell.holiday.pink .cal-date { color: #be185d; }
-.cal-cell.holiday.blue .cal-date { color: #2563eb; }
-.cal-cell.holiday.green .cal-date { color: #047857; }
+.cal-cell.holiday.flag {
+  background-color: #de2910;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'><g transform='rotate(-10 15 10) translate(3 2)'><rect x='-5' y='-5' width='40' height='30' fill='%23de2910'/><polygon fill='%23ffde00' points='5,2 5.67,4.07 7.85,4.07 6.09,5.35 6.76,7.43 5,6.15 3.24,7.43 3.91,5.35 2.15,4.07 4.33,4.07'/><polygon fill='%23ffde00' transform='rotate(-120.96 10 2)' points='10,1 10.23,1.69 10.95,1.69 10.36,2.12 10.59,2.81 10,2.38 9.41,2.81 9.64,2.12 9.05,1.69 9.78,1.69'/><polygon fill='%23ffde00' transform='rotate(-98.13 12 4)' points='12,3 12.23,3.69 12.95,3.69 12.36,4.12 12.59,4.81 12,4.38 11.41,4.81 11.64,4.12 11.05,3.69 11.78,3.69'/><polygon fill='%23ffde00' transform='rotate(-74.05 12 7)' points='12,6 12.23,6.69 12.95,6.69 12.36,7.12 12.59,7.81 12,7.38 11.41,7.81 11.64,7.12 11.05,6.69 11.78,6.69'/><polygon fill='%23ffde00' transform='rotate(-51.34 10 9)' points='10,8 10.23,8.69 10.95,8.69 10.36,9.12 10.59,9.81 10,9.38 9.41,9.81 9.64,9.12 9.05,8.69 9.78,8.69'/></g></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
 .cal-cell.holiday.beige .cal-date { color: #57534e; }
-.cal-cell.holiday.peach .cal-date { color: #c2410c; }
+.cal-cell.holiday.china .cal-date { color: #ffde00; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.7); }
+.cal-cell.holiday.brocade .cal-date { color: #7f1d1d; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+.cal-cell.holiday.firework .cal-date { color: #7c2d12; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+.cal-cell.holiday.glow .cal-date { color: #7f1d1d; text-shadow: 0 1px 0 rgba(255,255,255,.4); }
 .cal-cell.holiday.dawn .cal-date { color: #9d174d; }
 .cal-cell.holiday.aurora .cal-date { color: #0f766e; }
-[data-theme="dark"] .cal-cell.holiday.yellow {
-  background: linear-gradient(rgba(253,230,138,.22), rgba(253,230,138,.22)),
-              linear-gradient(var(--panel), var(--panel)) padding-box,
-              linear-gradient(135deg, #fbbf24, #f59e0b) border-box;
-}
-[data-theme="dark"] .cal-cell.holiday.yellow .cal-date { color: #fde68a; }
-[data-theme="dark"] .cal-cell.holiday.pink {
-  background: linear-gradient(rgba(251,207,232,.22), rgba(251,207,232,.22)),
-              linear-gradient(var(--panel), var(--panel)) padding-box,
-              linear-gradient(135deg, #f472b6, #ec4899) border-box;
-}
-[data-theme="dark"] .cal-cell.holiday.pink .cal-date { color: #fbcfe8; }
-[data-theme="dark"] .cal-cell.holiday.blue {
-  background: linear-gradient(rgba(147,197,253,.22), rgba(147,197,253,.22)),
-              linear-gradient(var(--panel), var(--panel)) padding-box,
-              linear-gradient(135deg, #60a5fa, #3b82f6) border-box;
-}
-[data-theme="dark"] .cal-cell.holiday.blue .cal-date { color: #bfdbfe; }
-[data-theme="dark"] .cal-cell.holiday.green {
-  background: linear-gradient(rgba(167,243,208,.22), rgba(167,243,208,.22)),
-              linear-gradient(var(--panel), var(--panel)) padding-box,
-              linear-gradient(135deg, #34d399, #10b981) border-box;
-}
-[data-theme="dark"] .cal-cell.holiday.green .cal-date { color: #a7f3d0; }
+.cal-cell.holiday.flag .cal-date { color: #ffde00; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.9), 0 0 6px rgba(0,0,0,.7); }
 [data-theme="dark"] .cal-cell.holiday.beige {
   background: linear-gradient(rgba(250,250,249,.12), rgba(250,250,249,.12)),
               linear-gradient(var(--panel), var(--panel)) padding-box,
               linear-gradient(135deg, #a8a29e, #78716c) border-box;
 }
 [data-theme="dark"] .cal-cell.holiday.beige .cal-date { color: #fafaf9; }
-[data-theme="dark"] .cal-cell.holiday.peach {
-  background: linear-gradient(rgba(254,215,170,.22), rgba(254,215,170,.22)),
+[data-theme="dark"] .cal-cell.holiday.china { background: #de2910; }
+[data-theme="dark"] .cal-cell.holiday.china .cal-date { color: #ffde00; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.8); }
+[data-theme="dark"] .cal-cell.holiday.brocade {
+  background: linear-gradient(135deg, rgba(252,165,165,.22), rgba(251,191,36,.22)),
               linear-gradient(var(--panel), var(--panel)) padding-box,
-              linear-gradient(135deg, #fb923c, #f97316) border-box;
+              linear-gradient(135deg, #f87171, #fbbf24) border-box;
 }
-[data-theme="dark"] .cal-cell.holiday.peach .cal-date { color: #fed7aa; }
+[data-theme="dark"] .cal-cell.holiday.brocade .cal-date { color: #fed7aa; }
+[data-theme="dark"] .cal-cell.holiday.firework {
+  background: linear-gradient(135deg, rgba(254,243,199,.18) 0%, rgba(251,191,36,.22) 30%, rgba(251,113,133,.22) 65%, rgba(192,132,252,.22) 100%),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #fbbf24, #fb7185, #c084fc) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.firework .cal-date { color: #fed7aa; }
+[data-theme="dark"] .cal-cell.holiday.glow {
+  background: linear-gradient(135deg, rgba(254,215,170,.22), rgba(251,113,133,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #fb923c, #fb7185) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.glow .cal-date { color: #fed7aa; }
 [data-theme="dark"] .cal-cell.holiday.dawn {
   background: linear-gradient(rgba(254,243,199,.18), rgba(252,231,243,.18)),
               linear-gradient(var(--panel), var(--panel)) padding-box,
@@ -499,6 +495,14 @@ body.bulk-mode .drag-handle { display: none; }
               linear-gradient(135deg, #34d399, #22d3ee) border-box;
 }
 [data-theme="dark"] .cal-cell.holiday.aurora .cal-date { color: #a7f3d0; }
+[data-theme="dark"] .cal-cell.holiday.flag {
+  background-color: #de2910;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 20'><g transform='rotate(-10 15 10) translate(3 2)'><rect x='-5' y='-5' width='40' height='30' fill='%23de2910'/><polygon fill='%23ffde00' points='5,2 5.67,4.07 7.85,4.07 6.09,5.35 6.76,7.43 5,6.15 3.24,7.43 3.91,5.35 2.15,4.07 4.33,4.07'/><polygon fill='%23ffde00' transform='rotate(-120.96 10 2)' points='10,1 10.23,1.69 10.95,1.69 10.36,2.12 10.59,2.81 10,2.38 9.41,2.81 9.64,2.12 9.05,1.69 9.78,1.69'/><polygon fill='%23ffde00' transform='rotate(-98.13 12 4)' points='12,3 12.23,3.69 12.95,3.69 12.36,4.12 12.59,4.81 12,4.38 11.41,4.81 11.64,4.12 11.05,3.69 11.78,3.69'/><polygon fill='%23ffde00' transform='rotate(-74.05 12 7)' points='12,6 12.23,6.69 12.95,6.69 12.36,7.12 12.59,7.81 12,7.38 11.41,7.81 11.64,7.12 11.05,6.69 11.78,6.69'/><polygon fill='%23ffde00' transform='rotate(-51.34 10 9)' points='10,8 10.23,8.69 10.95,8.69 10.36,9.12 10.59,9.81 10,9.38 9.41,9.81 9.64,9.12 9.05,8.69 9.78,8.69'/></g></svg>");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+}
+[data-theme="dark"] .cal-cell.holiday.flag .cal-date { color: #ffde00; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.95), 0 0 8px rgba(0,0,0,.8); }
 .cal-cell.today {
   background: linear-gradient(var(--primary-bg), var(--primary-bg)) padding-box,
               linear-gradient(135deg, var(--primary-from, var(--primary)), var(--primary-to, var(--primary))) border-box;
