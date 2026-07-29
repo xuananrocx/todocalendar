@@ -48,7 +48,8 @@
       "icons/icon_bf_64.png",
       "icons/icon_bf_128.png",
       "icons/icon_bf_256.png",
-      "icons/icon_bf.ico"
+      "icons/icon_bf.ico",
+      "resources/holidays.json"
     ],
     "category": "Productivity",
     "shortDescription": "Lightweight calendar + todo app",

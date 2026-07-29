@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -105,6 +106,9 @@ pub struct Settings {
     pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
     pub stats_style: String, // text | chip | bar
     pub clock_show_seconds: bool, // 顶部时钟显示秒数(隐藏日期,显示进度条)
+    pub holiday_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
+    pub holiday_auto_update: bool,
+    pub holiday_last_update: Option<String>,
 }
 
 impl Default for Settings {
@@ -154,6 +158,9 @@ impl Default for Settings {
             weekend_color: "beige".into(),
             stats_style: "text".into(),
             clock_show_seconds: false,
+            holiday_color: "none".into(),
+            holiday_auto_update: true,
+            holiday_last_update: None,
         }
     }
 }
@@ -191,6 +198,185 @@ fn data_file(app: &tauri::AppHandle) -> PathBuf {
 
 fn settings_file(app: &tauri::AppHandle) -> PathBuf {
     app_dir(app).join("settings.json")
+}
+
+// ===== 法定节假日数据 =====
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct HolidayDay {
+    name: String,
+    date: String, // YYYY-MM-DD
+    #[serde(rename = "isOffDay")]
+    is_off_day: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct HolidaysData {
+    #[serde(default)]
+    days: Vec<HolidayDay>,
+}
+
+static HOLIDAYS: Mutex<Option<HolidaysData>> = Mutex::new(None);
+
+fn holidays_cache_file(app: &tauri::AppHandle) -> PathBuf {
+    app_dir(app).join("holidays_cache.json")
+}
+
+fn parse_holidays(s: &str) -> Option<HolidaysData> {
+    serde_json::from_str::<HolidaysData>(s).ok()
+}
+
+fn load_builtin_holidays(app: &tauri::AppHandle) -> HolidaysData {
+    let resource = app
+        .path()
+        .resolve("resources/holidays.json", tauri::path::BaseDirectory::Resource)
+        .ok();
+    if let Some(p) = resource {
+        if let Ok(s) = fs::read_to_string(&p) {
+            if let Some(d) = parse_holidays(&s) {
+                return d;
+            }
+        }
+    }
+    HolidaysData::default()
+}
+
+fn load_holidays(app: &tauri::AppHandle) -> HolidaysData {
+    if let Ok(guard) = HOLIDAYS.lock() {
+        if let Some(data) = guard.as_ref() {
+            return data.clone();
+        }
+    }
+    let cache = holidays_cache_file(app);
+    let data = if cache.exists() {
+        fs::read_to_string(&cache)
+            .ok()
+            .and_then(|s| parse_holidays(&s))
+            .unwrap_or_else(|| load_builtin_holidays(app))
+    } else {
+        load_builtin_holidays(app)
+    };
+    if let Ok(mut guard) = HOLIDAYS.lock() {
+        *guard = Some(data.clone());
+    }
+    data
+}
+
+async fn fetch_year_holidays(year: i32) -> Result<HolidaysData, String> {
+    let urls = [
+        format!("https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{}.json", year),
+        format!("https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{}.json", year),
+    ];
+    for url in urls {
+        let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
+        let text = resp.text().await.map_err(|e| e.to_string())?;
+        if let Ok(v) = serde_json::from_str::<Value>(&text) {
+            if let Some(days_arr) = v.get("days").and_then(|d| d.as_array()) {
+                let mut days = Vec::new();
+                for d in days_arr {
+                    let name = d.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                    let date = d.get("date").and_then(|n| n.as_str()).unwrap_or("").to_string();
+                    let is_off = d.get("isOffDay").and_then(|n| n.as_bool()).unwrap_or(false);
+                    if !date.is_empty() {
+                        days.push(HolidayDay { name, date, is_off_day: is_off });
+                    }
+                }
+                if !days.is_empty() {
+                    return Ok(HolidaysData { days });
+                }
+            }
+        }
+    }
+    Err("所有源都失败".into())
+}
+
+#[tauri::command]
+fn list_holidays(app: tauri::AppHandle) -> Value {
+    let data = load_holidays(&app);
+    let mut map: serde_json::Map<String, Value> = serde_json::Map::new();
+    for d in &data.days {
+        map.insert(
+            d.date.clone(),
+            json!({ "name": d.name, "isOffDay": d.is_off_day }),
+        );
+    }
+    Value::Object(map)
+}
+
+#[tauri::command]
+async fn check_holiday_updates(app: tauri::AppHandle) -> Result<String, String> {
+    let year = Utc::now().format("%Y").to_string().parse::<i32>().unwrap_or(2025);
+    let years = vec![year, year + 1];
+    let mut fetched: Vec<HolidayDay> = Vec::new();
+    let mut fetched_years: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for y in years {
+        match fetch_year_holidays(y).await {
+            Ok(data) => {
+                fetched_years.insert(y.to_string());
+                fetched.extend(data.days);
+            }
+            Err(_) => continue,
+        }
+    }
+    if fetched.is_empty() {
+        return Err("未能获取任何节假日数据,请检查网络".into());
+    }
+    let existing = load_holidays(&app);
+    let mut merged: Vec<HolidayDay> = existing
+        .days
+        .into_iter()
+        .filter(|d| !fetched_years.contains(&d.date[..4]))
+        .collect();
+    merged.extend(fetched);
+    let new_data = HolidaysData { days: merged };
+    let cache = holidays_cache_file(&app);
+    let json_text = serde_json::to_string_pretty(&new_data).map_err(|e| e.to_string())?;
+    fs::write(&cache, json_text).map_err(|e| e.to_string())?;
+    if let Ok(mut guard) = HOLIDAYS.lock() {
+        *guard = Some(new_data.clone());
+    }
+    Ok(format!("已更新 {} 条记录", new_data.days.len()))
+}
+
+fn maybe_auto_update_holidays(app: &tauri::AppHandle) {
+    let settings_text = match fs::read_to_string(settings_file(app)) {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let s: Value = match serde_json::from_str(&settings_text) {
+        Ok(v) => v,
+        Err(_) => return,
+    };
+    let auto = s.get("holidayAutoUpdate").and_then(|v| v.as_bool()).unwrap_or(true);
+    if !auto {
+        return;
+    }
+    let last = s.get("holidayLastUpdate").and_then(|v| v.as_str());
+    if let Some(last) = last {
+        if let Ok(last_dt) = DateTime::parse_from_rfc3339(last) {
+            let elapsed = Utc::now().signed_duration_since(last_dt.with_timezone(&Utc));
+            if elapsed < Duration::days(30) {
+                return;
+            }
+        }
+    }
+    let app_handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        match check_holiday_updates(app_handle.clone()).await {
+            Ok(_) => {
+                if let Ok(mut s_text) = fs::read_to_string(settings_file(&app_handle)) {
+                    if let Ok(mut v) = serde_json::from_str::<Value>(&s_text) {
+                        if let Some(obj) = v.as_object_mut() {
+                            obj.insert("holidayLastUpdate".into(), json!(now_iso()));
+                            s_text = serde_json::to_string(&v).unwrap_or(s_text);
+                            let _ = fs::write(settings_file(&app_handle), s_text);
+                        }
+                    }
+                }
+            }
+            Err(_) => {}
+        }
+    });
 }
 
 const DATA_VERSION: &str = "2";
@@ -1141,9 +1327,12 @@ pub fn run() {
             delete_group,
             reorder_groups,
             set_todo_group,
+            list_holidays,
+            check_holiday_updates,
         ])
         .setup(|app| {
             apply_app_icon_on_startup(app.handle());
+            maybe_auto_update_holidays(app.handle());
             Ok(())
         })
         .run(tauri::generate_context!())

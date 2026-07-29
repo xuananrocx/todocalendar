@@ -59,6 +59,9 @@ const Main = {
       try {
         this.state.groups = await API.listGroups();
       } catch (e) { console.warn('listGroups failed:', e); this.state.groups = []; }
+      try {
+        this.state.holidays = await window.__TAURI__.core.invoke('list_holidays');
+      } catch (e) { console.warn('list_holidays failed:', e); this.state.holidays = {}; }
       Render.renderAll(this.state);
       this.renderGroupBar();
     } catch (e) {
@@ -1523,6 +1526,29 @@ const Main = {
           </div>
           <div class="settings-row-desc">给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)</div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">法定假日窗格颜色</div>
+          <div class="color-picker" data-onchange="holidayColor">
+            ${this._colorSwatch('none', '无', '#ffffff', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('yellow', '浅黄', '#fef3c7', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('blue', '浅蓝', '#dbeafe', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.holidayColor || 'none')}
+            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.holidayColor || 'none')}
+          </div>
+          <div class="settings-row-desc">给法定假日窗格添加颜色标识(优先级高于周末色;调休上班日不应用周末色)</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">节假日数据更新</div>
+          <div>${this._toggle(s.holidayAutoUpdate !== false, 'holidayAutoUpdate', '自动检查更新', '启动时若距上次超过30天,后台拉取最新数据')}</div>
+          <div style="margin-top:6px">
+            <button class="btn ghost" id="btnCheckHolidayUpdates" style="padding:4px 10px;font-size:12px"><i data-icon="refresh"></i> 立即检查更新</button>
+          </div>
+          <div class="settings-row-desc" style="margin-top:4px">${s.holidayLastUpdate ? `上次更新:${new Date(s.holidayLastUpdate).toLocaleString('zh-CN')}` : '尚未更新(使用内置数据)'}</div>
+        </div>
         <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
         <div class="settings-row">
           <div class="settings-row-label">当天开始事件条颜色</div>
@@ -1711,6 +1737,30 @@ const Main = {
         const days = Math.max(1, Math.trunc(Number(archiveAfterDays.value) || 7));
         archiveAfterDays.value = String(days);
         await this.patchSettings({ archiveAfterDays: days });
+      };
+    }
+
+    const btnCheckHoliday = content.querySelector('#btnCheckHolidayUpdates');
+    if (btnCheckHoliday) {
+      btnCheckHoliday.onclick = async () => {
+        const original = btnCheckHoliday.innerHTML;
+        btnCheckHoliday.disabled = true;
+        btnCheckHoliday.innerHTML = '<i data-icon="refresh"></i> 检查中...';
+        if (window.Icon) window.Icon.render(btnCheckHoliday);
+        try {
+          const msg = await window.__TAURI__.core.invoke('check_holiday_updates');
+          const now = new Date().toISOString();
+          await this.patchSettings({ holidayLastUpdate: now });
+          this.state.holidays = await window.__TAURI__.core.invoke('list_holidays');
+          Render.renderAll(this.state);
+          this.confirmAction({ title: '更新成功', message: msg, confirmText: '知道了', hideCancel: true });
+        } catch (e) {
+          this.confirmAction({ title: '更新失败', message: window.__tauriErrMsg ? window.__tauriErrMsg(e) : String(e), confirmText: '知道了', hideCancel: true, danger: true });
+        } finally {
+          btnCheckHoliday.disabled = false;
+          btnCheckHoliday.innerHTML = original;
+          if (window.Icon) window.Icon.render(btnCheckHoliday);
+        }
       };
     }
 

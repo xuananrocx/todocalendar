@@ -435,6 +435,70 @@ body.bulk-mode .drag-handle { display: none; }
               linear-gradient(135deg, #34d399, #22d3ee) border-box;
 }
 [data-theme="dark"] .cal-cell.weekend.aurora .cal-date { color: #a7f3d0; }
+.cal-cell.holiday.yellow { background: #fef3c7; }
+.cal-cell.holiday.pink { background: #fce7f3; }
+.cal-cell.holiday.blue { background: #dbeafe; }
+.cal-cell.holiday.green { background: #d1fae5; }
+.cal-cell.holiday.beige { background: #fafaf9; }
+.cal-cell.holiday.peach { background: #ffedd5; }
+.cal-cell.holiday.dawn { background: linear-gradient(135deg, #fef3c7, #fce7f3); }
+.cal-cell.holiday.aurora { background: linear-gradient(135deg, #f0fdf4, #ecfeff); }
+.cal-cell.holiday.yellow .cal-date { color: #b45309; }
+.cal-cell.holiday.pink .cal-date { color: #be185d; }
+.cal-cell.holiday.blue .cal-date { color: #2563eb; }
+.cal-cell.holiday.green .cal-date { color: #047857; }
+.cal-cell.holiday.beige .cal-date { color: #57534e; }
+.cal-cell.holiday.peach .cal-date { color: #c2410c; }
+.cal-cell.holiday.dawn .cal-date { color: #9d174d; }
+.cal-cell.holiday.aurora .cal-date { color: #0f766e; }
+[data-theme="dark"] .cal-cell.holiday.yellow {
+  background: linear-gradient(rgba(253,230,138,.22), rgba(253,230,138,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #fbbf24, #f59e0b) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.yellow .cal-date { color: #fde68a; }
+[data-theme="dark"] .cal-cell.holiday.pink {
+  background: linear-gradient(rgba(251,207,232,.22), rgba(251,207,232,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #f472b6, #ec4899) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.pink .cal-date { color: #fbcfe8; }
+[data-theme="dark"] .cal-cell.holiday.blue {
+  background: linear-gradient(rgba(147,197,253,.22), rgba(147,197,253,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #60a5fa, #3b82f6) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.blue .cal-date { color: #bfdbfe; }
+[data-theme="dark"] .cal-cell.holiday.green {
+  background: linear-gradient(rgba(167,243,208,.22), rgba(167,243,208,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #34d399, #10b981) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.green .cal-date { color: #a7f3d0; }
+[data-theme="dark"] .cal-cell.holiday.beige {
+  background: linear-gradient(rgba(250,250,249,.12), rgba(250,250,249,.12)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #a8a29e, #78716c) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.beige .cal-date { color: #fafaf9; }
+[data-theme="dark"] .cal-cell.holiday.peach {
+  background: linear-gradient(rgba(254,215,170,.22), rgba(254,215,170,.22)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #fb923c, #f97316) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.peach .cal-date { color: #fed7aa; }
+[data-theme="dark"] .cal-cell.holiday.dawn {
+  background: linear-gradient(rgba(254,243,199,.18), rgba(252,231,243,.18)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #fbbf24, #f472b6) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.dawn .cal-date { color: #fbcfe8; }
+[data-theme="dark"] .cal-cell.holiday.aurora {
+  background: linear-gradient(rgba(240,253,244,.18), rgba(236,254,255,.18)),
+              linear-gradient(var(--panel), var(--panel)) padding-box,
+              linear-gradient(135deg, #34d399, #22d3ee) border-box;
+}
+[data-theme="dark"] .cal-cell.holiday.aurora .cal-date { color: #a7f3d0; }
 .cal-cell.today {
   background: linear-gradient(var(--primary-bg), var(--primary-bg)) padding-box,
               linear-gradient(135deg, var(--primary-from, var(--primary)), var(--primary-to, var(--primary))) border-box;

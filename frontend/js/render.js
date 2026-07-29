@@ -805,7 +805,15 @@ const Render = {
       if (Render.sameDay(c.date, today)) cell.classList.add('today');
       if (state.dayViewDate && Render.sameDay(c.date, state.dayViewDate)) cell.classList.add('selected');
       const wc = state.settings?.weekendColor;
-      if (wc && wc !== 'none') {
+      const hc = state.settings?.holidayColor;
+      const holidays = state.holidays || {};
+      const dateStr = `${c.date.getFullYear()}-${String(c.date.getMonth() + 1).padStart(2, '0')}-${String(c.date.getDate()).padStart(2, '0')}`;
+      const holiday = holidays[dateStr];
+      const isWorkingdayOverride = holiday && !holiday.isOffDay; // 调休上班日
+      const isOffHoliday = holiday && holiday.isOffDay; // 法定假日
+      if (hc && hc !== 'none' && isOffHoliday) {
+        cell.classList.add('holiday', hc);
+      } else if (wc && wc !== 'none' && !isWorkingdayOverride) {
         const dow = c.date.getDay();
         if (dow === 0 || dow === 6) cell.classList.add('weekend', wc);
       }
