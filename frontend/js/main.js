@@ -1250,6 +1250,150 @@ const Main = {
     if (previousFocus?.isConnected) requestAnimationFrame(() => previousFocus.focus());
   },
 
+  runHolidayUpdateWithProgress() {
+    if (this._holidayUpdating) return Promise.resolve();
+    this._holidayUpdating = true;
+
+    const mask = document.getElementById('holidayProgressMask');
+    const body = document.getElementById('holidayProgressBody');
+    const closeBtn = document.getElementById('btnHolidayProgressClose');
+    const titleEl = document.getElementById('holidayProgressTitle');
+    const previousFocus = document.activeElement;
+
+    body.innerHTML = '';
+    closeBtn.disabled = true;
+    titleEl.textContent = '正在检查节假日更新';
+    mask.hidden = false;
+
+    const ICONS = { connecting: '⋯', ok: '✓', warning: '⚠', failed: '✗' };
+    const rows = new Map(); // key -> { div, iconEl, textEl }
+    const yearSections = new Map(); // year -> container div
+
+    const getYearSection = (year) => {
+      if (yearSections.has(year)) return yearSections.get(year);
+      const section = document.createElement('div');
+      section.className = 'holiday-year';
+      const head = document.createElement('div');
+      head.className = 'holiday-year-head';
+      head.innerHTML = `<span class="holiday-year-name">${year} 年</span><span class="holiday-year-status">⋯</span>`;
+      section.appendChild(head);
+      const list = document.createElement('div');
+      list.className = 'holiday-year-list';
+      section.appendChild(list);
+      section._list = list;
+      section._status = head.querySelector('.holiday-year-status');
+      body.appendChild(section);
+      yearSections.set(year, section);
+      return section;
+    };
+
+    const setYearStatus = (year, status, text) => {
+      const section = getYearSection(year);
+      section._status.className = `holiday-year-status ${status}`;
+      section._status.textContent = text;
+    };
+
+    const upsertRow = (year, sourceIdx, status, html) => {
+      const section = getYearSection(year);
+      const key = `${year}-${sourceIdx}`;
+      let row = rows.get(key);
+      if (!row) {
+        const div = document.createElement('div');
+        div.className = `holiday-log ${status}`;
+        div.innerHTML = `<span class="holiday-log-icon"></span><span class="holiday-log-text"></span>`;
+        section._list.appendChild(div);
+        row = { div, iconEl: div.querySelector('.holiday-log-icon'), textEl: div.querySelector('.holiday-log-text') };
+        rows.set(key, row);
+      }
+      row.div.className = `holiday-log ${status}`;
+      row.iconEl.textContent = ICONS[status] || '';
+      row.textEl.innerHTML = html;
+      body.scrollTop = body.scrollHeight;
+    };
+
+    const appendStandalone = (status, html) => {
+      const div = document.createElement('div');
+      div.className = `holiday-log ${status} standalone`;
+      div.innerHTML = `<span class="holiday-log-icon">${ICONS[status] || ''}</span><span class="holiday-log-text">${html}</span>`;
+      body.appendChild(div);
+      body.scrollTop = body.scrollHeight;
+    };
+
+    let unlisten = null;
+    const cleanup = () => {
+      if (unlisten) { unlisten(); unlisten = null; }
+      this._holidayUpdating = false;
+    };
+    const close = () => {
+      mask.hidden = true;
+      cleanup();
+      if (previousFocus?.isConnected) requestAnimationFrame(() => previousFocus.focus());
+    };
+
+    const yearFinalStatus = {};
+
+    return window.__TAURI__.event.listen('holiday-progress', (e) => {
+      const p = e.payload;
+      if (p.status === 'saving') {
+        if (p.yearResults) {
+          for (const r of p.yearResults) {
+            const label = { ok: '✓ 成功', warning: '⚠ 未发布', failed: '✗ 失败' }[r.status] || r.status;
+            setYearStatus(r.year, r.status === 'ok' ? 'ok' : r.status, `${label} · ${r.msg}`);
+          }
+        }
+        return;
+      }
+      const sec = p.elapsedMs ? `${(p.elapsedMs / 1000).toFixed(1)}s` : '';
+      if (p.status === 'connecting') {
+        upsertRow(p.year, p.sourceIdx, 'connecting', `<b>${p.sourceName}</b><br><span class="holiday-log-detail">${p.url}</span><br><span class="holiday-log-detail">连接中...</span>`);
+      } else if (p.status === 'ok') {
+        const kb = p.bytes ? `${(p.bytes / 1024).toFixed(1)} KB` : '';
+        const cnt = p.count != null ? `${p.count} 条` : '';
+        upsertRow(p.year, p.sourceIdx, 'ok', `<b>${p.sourceName}</b> · ${[sec, kb, cnt].filter(Boolean).join(' · ')}`);
+        yearFinalStatus[p.year] = 'ok';
+        setYearStatus(p.year, 'ok', '✓ 成功');
+      } else if (p.status === 'warning') {
+        upsertRow(p.year, p.sourceIdx, 'warning', `<b>${p.sourceName}</b>${sec ? ' · ' + sec : ''}<br><span class="holiday-log-detail">${p.warning || ''}</span>`);
+        if (yearFinalStatus[p.year] !== 'ok') {
+          yearFinalStatus[p.year] = 'warning';
+          setYearStatus(p.year, 'warning', '⚠ 未发布');
+        }
+      } else if (p.status === 'failed') {
+        upsertRow(p.year, p.sourceIdx, 'failed', `<b>${p.sourceName}</b>${sec ? ' · ' + sec : ''}<br><span class="holiday-log-detail">${p.error || '未知错误'}</span>`);
+        if (yearFinalStatus[p.year] !== 'ok' && yearFinalStatus[p.year] !== 'warning') {
+          yearFinalStatus[p.year] = 'failed';
+          setYearStatus(p.year, 'failed', '✗ 失败');
+        }
+      }
+    }).then(un => { unlisten = un; })
+      .then(() => window.__TAURI__.core.invoke('check_holiday_updates'))
+      .then(async (msg) => {
+        const now = new Date().toISOString();
+        await this.patchSettings({ holidayLastUpdate: now });
+        this.state.holidays = await window.__TAURI__.core.invoke('list_holidays');
+        Render.renderAll(this.state);
+        const descEl = document.getElementById('holidayLastUpdateDesc');
+        if (descEl) descEl.textContent = `上次更新:${new Date(now).toLocaleString('zh-CN')}`;
+        titleEl.textContent = '更新完成';
+        appendStandalone('ok', `<b>${msg}</b>`);
+        closeBtn.disabled = true;
+        setTimeout(() => {
+          close();
+          this.confirmAction({ title: '更新成功', message: msg, confirmText: '知道了', hideCancel: true });
+        }, 800);
+      })
+      .catch((err) => {
+        titleEl.textContent = '更新失败';
+        const errText = (typeof err === 'string' && err.startsWith('更新进行中'))
+          ? err
+          : (window.__tauriErrMsg ? window.__tauriErrMsg(err) : String(err));
+        appendStandalone('failed', `<b>${errText}</b>`);
+        closeBtn.disabled = false;
+        closeBtn.onclick = close;
+        requestAnimationFrame(() => closeBtn.focus());
+      });
+  },
+
   promptAction({ title = '输入', value = '', placeholder = '', confirmText = '确认', showDelete = false, deleteText = '删除分组' } = {}) {
     if (this.promptResolver) this.closePrompt({ type: 'cancel', value: '' });
 
@@ -1547,7 +1691,7 @@ const Main = {
           <div style="margin-top:6px">
             <button class="btn ghost" id="btnCheckHolidayUpdates" style="padding:4px 10px;font-size:12px"><i data-icon="refresh"></i> 立即检查更新</button>
           </div>
-          <div class="settings-row-desc" style="margin-top:4px">${s.holidayLastUpdate ? `上次更新:${new Date(s.holidayLastUpdate).toLocaleString('zh-CN')}` : '尚未更新(使用内置数据)'}</div>
+          <div class="settings-row-desc" id="holidayLastUpdateDesc" style="margin-top:4px">${s.holidayLastUpdate ? `上次更新:${new Date(s.holidayLastUpdate).toLocaleString('zh-CN')}` : '尚未更新(使用内置数据)'}</div>
         </div>
         <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
         <div class="settings-row">
@@ -1743,24 +1887,7 @@ const Main = {
     const btnCheckHoliday = content.querySelector('#btnCheckHolidayUpdates');
     if (btnCheckHoliday) {
       btnCheckHoliday.onclick = async () => {
-        const original = btnCheckHoliday.innerHTML;
-        btnCheckHoliday.disabled = true;
-        btnCheckHoliday.innerHTML = '<i data-icon="refresh"></i> 检查中...';
-        if (window.Icon) window.Icon.render(btnCheckHoliday);
-        try {
-          const msg = await window.__TAURI__.core.invoke('check_holiday_updates');
-          const now = new Date().toISOString();
-          await this.patchSettings({ holidayLastUpdate: now });
-          this.state.holidays = await window.__TAURI__.core.invoke('list_holidays');
-          Render.renderAll(this.state);
-          this.confirmAction({ title: '更新成功', message: msg, confirmText: '知道了', hideCancel: true });
-        } catch (e) {
-          this.confirmAction({ title: '更新失败', message: window.__tauriErrMsg ? window.__tauriErrMsg(e) : String(e), confirmText: '知道了', hideCancel: true, danger: true });
-        } finally {
-          btnCheckHoliday.disabled = false;
-          btnCheckHoliday.innerHTML = original;
-          if (window.Icon) window.Icon.render(btnCheckHoliday);
-        }
+        await this.runHolidayUpdateWithProgress();
       };
     }
 

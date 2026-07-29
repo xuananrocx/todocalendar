@@ -1,12 +1,15 @@
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::Instant;
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use uuid::Uuid;
+
+static HOLIDAY_UPDATE_LOCK: Mutex<bool> = Mutex::new(false);
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -262,16 +265,84 @@ fn load_holidays(app: &tauri::AppHandle) -> HolidaysData {
     data
 }
 
-async fn fetch_year_holidays(year: i32) -> Result<HolidaysData, String> {
+async fn fetch_year_holidays(
+    app: &tauri::AppHandle,
+    year: i32,
+    step_idx: usize,
+    total_steps: usize,
+) -> Result<HolidaysData, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
     let urls = [
-        format!("https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{}.json", year),
-        format!("https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{}.json", year),
+        ("GitHub raw", format!("https://raw.githubusercontent.com/NateScarlet/holiday-cn/master/{}.json", year)),
+        ("jsDelivr CDN", format!("https://cdn.jsdelivr.net/gh/NateScarlet/holiday-cn@master/{}.json", year)),
     ];
-    for url in urls {
-        let resp = reqwest::get(&url).await.map_err(|e| e.to_string())?;
-        let text = resp.text().await.map_err(|e| e.to_string())?;
-        if let Ok(v) = serde_json::from_str::<Value>(&text) {
-            if let Some(days_arr) = v.get("days").and_then(|d| d.as_array()) {
+
+    let emit_progress = |source_idx: usize, source_name: &str, url: &str, status: &str, elapsed: u128, payload_extra: Value| {
+        let mut map = serde_json::Map::new();
+        map.insert("step".into(), json!(step_idx));
+        map.insert("totalSteps".into(), json!(total_steps));
+        map.insert("sourceIdx".into(), json!(source_idx));
+        map.insert("sourceName".into(), json!(source_name));
+        map.insert("url".into(), json!(url));
+        map.insert("year".into(), json!(year));
+        map.insert("status".into(), json!(status));
+        map.insert("elapsedMs".into(), json!(elapsed));
+        if let Value::Object(obj) = payload_extra {
+            for (k, v) in obj {
+                map.insert(k, v);
+            }
+        }
+        let _ = app.emit("holiday-progress", Value::Object(map));
+    };
+
+    let mut last_err = String::new();
+    let mut last_was_network_err = false;
+    for (source_idx, (source_name, url)) in urls.iter().enumerate() {
+        emit_progress(source_idx, source_name, url, "connecting", 0, json!({}));
+        let t0 = Instant::now();
+        match client.get(url.as_str()).send().await {
+            Ok(resp) => {
+                let status_code = resp.status();
+                let elapsed = t0.elapsed().as_millis();
+                if status_code.as_u16() == 404 {
+                    last_err = format!("{} 年数据尚未发布", year);
+                    last_was_network_err = false;
+                    emit_progress(source_idx, source_name, url, "warning", elapsed, json!({ "warning": last_err.clone() }));
+                    continue;
+                }
+                if !status_code.is_success() {
+                    last_err = format!("HTTP {}", status_code.as_u16());
+                    last_was_network_err = true;
+                    emit_progress(source_idx, source_name, url, "failed", elapsed, json!({ "error": last_err.clone() }));
+                    continue;
+                }
+                let text = match resp.text().await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        let elapsed = t0.elapsed().as_millis();
+                        last_err = e.to_string();
+                        last_was_network_err = true;
+                        emit_progress(source_idx, source_name, url, "failed", elapsed, json!({ "error": last_err.clone() }));
+                        continue;
+                    }
+                };
+                let elapsed = t0.elapsed().as_millis();
+                let bytes = text.len();
+                let Ok(v) = serde_json::from_str::<Value>(&text) else {
+                    last_err = "JSON 解析失败".into();
+                    last_was_network_err = true;
+                    emit_progress(source_idx, source_name, url, "failed", elapsed, json!({ "error": last_err.clone() }));
+                    continue;
+                };
+                let Some(days_arr) = v.get("days").and_then(|d| d.as_array()) else {
+                    last_err = format!("{} 年数据为空", year);
+                    last_was_network_err = false;
+                    emit_progress(source_idx, source_name, url, "warning", elapsed, json!({ "warning": last_err.clone() }));
+                    continue;
+                };
                 let mut days = Vec::new();
                 for d in days_arr {
                     let name = d.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string();
@@ -281,13 +352,41 @@ async fn fetch_year_holidays(year: i32) -> Result<HolidaysData, String> {
                         days.push(HolidayDay { name, date, is_off_day: is_off });
                     }
                 }
-                if !days.is_empty() {
-                    return Ok(HolidaysData { days });
+                if days.is_empty() {
+                    last_err = format!("{} 年数据为空", year);
+                    last_was_network_err = false;
+                    emit_progress(source_idx, source_name, url, "warning", elapsed, json!({ "warning": last_err.clone() }));
+                    continue;
                 }
+                emit_progress(source_idx, source_name, url, "ok", elapsed, json!({ "bytes": bytes, "count": days.len() }));
+                return Ok(HolidaysData { days });
+            }
+            Err(e) => {
+                let elapsed = t0.elapsed().as_millis();
+                let is_timeout = e.is_timeout();
+                last_err = if is_timeout {
+                    "连接超时(20s)".to_string()
+                } else {
+                    let msg = e.to_string();
+                    if msg.contains("dns") || msg.contains("resolve") {
+                        "DNS 解析失败".to_string()
+                    } else if msg.contains("connect") {
+                        "连接被拒绝".to_string()
+                    } else {
+                        msg
+                    }
+                };
+                last_was_network_err = true;
+                emit_progress(source_idx, source_name, url, "failed", elapsed, json!({ "error": last_err.clone() }));
+                continue;
             }
         }
     }
-    Err("所有源都失败".into())
+    if last_err.is_empty() {
+        last_err = "所有源都失败".into();
+    }
+    let _ = last_was_network_err;
+    Err(last_err)
 }
 
 #[tauri::command]
@@ -305,23 +404,66 @@ fn list_holidays(app: tauri::AppHandle) -> Value {
 
 #[tauri::command]
 async fn check_holiday_updates(app: tauri::AppHandle) -> Result<String, String> {
+    {
+        let mut guard = HOLIDAY_UPDATE_LOCK.lock().unwrap();
+        if *guard {
+            return Err("更新进行中,请稍后".into());
+        }
+        *guard = true;
+    }
+    let result = check_holiday_updates_inner(&app).await;
+    {
+        let mut guard = HOLIDAY_UPDATE_LOCK.lock().unwrap();
+        *guard = false;
+    }
+    result
+}
+
+async fn check_holiday_updates_inner(app: &tauri::AppHandle) -> Result<String, String> {
     let year = Utc::now().format("%Y").to_string().parse::<i32>().unwrap_or(2025);
     let years = vec![year, year + 1];
+    let total_steps = years.len();
     let mut fetched: Vec<HolidayDay> = Vec::new();
     let mut fetched_years: std::collections::HashSet<String> = std::collections::HashSet::new();
-    for y in years {
-        match fetch_year_holidays(y).await {
+    // (year, status: "ok"|"warning"|"failed", detail)
+    let mut year_results: Vec<(i32, &'static str, String)> = Vec::new();
+    for (idx, y) in years.iter().enumerate() {
+        match fetch_year_holidays(app, *y, idx, total_steps).await {
             Ok(data) => {
                 fetched_years.insert(y.to_string());
+                let count = data.days.len();
                 fetched.extend(data.days);
+                year_results.push((*y, "ok", format!("{} 条", count)));
             }
-            Err(_) => continue,
+            Err(e) => {
+                let trimmed = e.trim();
+                let status = if trimmed.ends_with("尚未发布") || trimmed.ends_with("数据为空") {
+                    "warning"
+                } else {
+                    "failed"
+                };
+                year_results.push((*y, status, e));
+            }
         }
     }
+    let _ = app.emit(
+        "holiday-progress",
+        json!({
+            "step": total_steps,
+            "totalSteps": total_steps,
+            "status": "saving",
+            "yearResults": year_results.iter().map(|(y, s, msg)| json!({ "year": y, "status": s, "msg": msg })).collect::<Vec<_>>(),
+        }),
+    );
     if fetched.is_empty() {
-        return Err("未能获取任何节假日数据,请检查网络".into());
+        let detail = year_results
+            .iter()
+            .map(|(y, s, msg)| format!("{}年: {}", y, match *s { "ok" => format!("成功({})", msg), "warning" => format!("警告({})", msg), _ => format!("失败({})", msg) }))
+            .collect::<Vec<_>>()
+            .join("; ");
+        return Err(format!("未能获取任何节假日数据。{}", detail));
     }
-    let existing = load_holidays(&app);
+    let existing = load_holidays(app);
     let mut merged: Vec<HolidayDay> = existing
         .days
         .into_iter()
@@ -329,13 +471,18 @@ async fn check_holiday_updates(app: tauri::AppHandle) -> Result<String, String> 
         .collect();
     merged.extend(fetched);
     let new_data = HolidaysData { days: merged };
-    let cache = holidays_cache_file(&app);
+    let cache = holidays_cache_file(app);
     let json_text = serde_json::to_string_pretty(&new_data).map_err(|e| e.to_string())?;
     fs::write(&cache, json_text).map_err(|e| e.to_string())?;
     if let Ok(mut guard) = HOLIDAYS.lock() {
         *guard = Some(new_data.clone());
     }
-    Ok(format!("已更新 {} 条记录", new_data.days.len()))
+    let year_summary = year_results
+        .iter()
+        .map(|(y, s, msg)| format!("{}年: {}", y, match *s { "ok" => format!("✓ {}", msg), "warning" => format!("⚠ {}", msg), _ => format!("✗ {}", msg) }))
+        .collect::<Vec<_>>()
+        .join(" / ");
+    Ok(format!("已更新 [{}],总计 {} 条记录", year_summary, new_data.days.len()))
 }
 
 fn maybe_auto_update_holidays(app: &tauri::AppHandle) {
