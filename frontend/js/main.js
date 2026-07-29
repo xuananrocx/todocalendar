@@ -497,42 +497,104 @@ const Main = {
     const ids = Array.from(this.state.bulkSelected);
     if (!ids.length) return;
     const todos = this.state.todos.filter(t => ids.includes(t.id));
-    const canArchive = todos.filter(t => t.done);
-    const skipped = todos.filter(t => !t.done);
-    if (!canArchive.length) {
+    const selectedDone = todos.filter(t => t.done);
+    const selectedUndone = todos.filter(t => !t.done);
+
+    // 顶层去重:仅当祖先也在 selectedDone(会归档)里才跳过
+    // (未完成的祖先不会触发归档,不能去重它的后代)
+    const doneIdSet = new Set(selectedDone.map(t => t.id));
+    const topLevel = selectedDone.filter(t => {
+      let pid = t.parentId;
+      while (pid) {
+        if (doneIdSet.has(pid)) return false;
+        const p = this.state.todos.find(x => x.id === pid);
+        pid = p?.parentId || null;
+      }
+      return true;
+    });
+
+    // 对每个顶层 root,展开子树,按状态分类
+    const archiveRoots = [];        // 可归档(整棵子树 done)
+    const skipUnfinishedRoots = []; // 跳过(子代办含未完成)
+    let totalArchiveCount = 0;       // 实际归档条数(含子代办)
+    let totalChildCount = 0;         // 子待办总数
+
+    for (const root of topLevel) {
+      const subtreeIds = this.collectDescendants(root.id);
+      const subtreeTodos = subtreeIds
+        .map(id => this.state.todos.find(t => t.id === id))
+        .filter(Boolean);
+      // 只看未归档的(已归档的不再重复)
+      const active = subtreeTodos.filter(t => !t.archivedAt);
+      const hasUnfinished = active.some(t => !t.done);
+      if (hasUnfinished) {
+        skipUnfinishedRoots.push(root);
+      } else {
+        archiveRoots.push(root);
+        totalArchiveCount += active.length;
+        totalChildCount += Math.max(0, active.length - 1);
+      }
+    }
+
+    // 全部无法归档的提示
+    if (!archiveRoots.length) {
+      const reason = selectedUndone.length === ids.length
+        ? `所选 <strong style="color:var(--overdue)">${ids.length}</strong> 项都未完成。<br>只能归档<strong>已完成</strong>的待办。`
+        : `所选 <strong style="color:var(--overdue)">${topLevel.length}</strong> 项的子树中含未完成子待办,无法归档。`;
       await this.confirmAction({
         title: '无法归档',
-        messageHtml: `<div class="confirm-message-bulk">所选 <strong style="color:var(--overdue)">${ids.length}</strong> 项都未完成。<br>只能归档<strong>已完成</strong>的待办。</div>`,
+        messageHtml: `<div class="confirm-message-bulk">${reason}</div>`,
         confirmText: '知道了',
         hideCancel: true,
       });
       return;
     }
+
+    // 分类汇总表格
+    const coveredCount = selectedDone.length - topLevel.length;
+    const skipRows = [];
+    if (selectedUndone.length) {
+      skipRows.push(`<span class="label">○ 自身未完成</span><span class="label">跳过</span><span class="num skip">${selectedUndone.length}</span>`);
+    }
+    if (skipUnfinishedRoots.length) {
+      skipRows.push(`<span class="label">○ 子代办未完成</span><span class="label">跳过</span><span class="num skip">${skipUnfinishedRoots.length}</span>`);
+    }
+    if (coveredCount > 0) {
+      skipRows.push(`<span class="label">↪ 随父待办归档</span><span class="label">合并</span><span class="num">${coveredCount}</span>`);
+    }
+    const showTable = skipRows.length || archiveRoots.length !== topLevel.length || totalChildCount > 0;
+
     const summaryHtml = `
       <div class="confirm-message-bulk">
-        ${skipped.length
+        ${skipRows.length || selectedUndone.length
           ? `已选 <strong>${ids.length}</strong> 项,分类如下:`
-          : `确认归档 <strong style="color:#10b981">${canArchive.length}</strong> 项已完成待办?`}
-        ${skipped.length || canArchive.length !== ids.length ? `
+          : `将归档 <strong style="color:#10b981">${totalArchiveCount}</strong> 项${totalChildCount ? ` <span style="color:var(--muted);font-size:11px">(${archiveRoots.length} 个父代办 + ${totalChildCount} 个子待办)</span>` : ''}`}
+        ${showTable ? `
         <div class="bulk-summary">
-          <span class="label">✓ 已完成</span><span></span><span class="num ok">${canArchive.length}</span>
-          ${skipped.length ? `<span class="label">○ 未完成</span><span class="label">跳过</span><span class="num skip">${skipped.length}</span>` : ''}
+          <span class="label">✓ 可归档</span><span></span><span class="num ok">${totalArchiveCount}</span>
+          ${skipRows.join('')}
         </div>` : ''}
       </div>`;
     const confirmed = await this.confirmAction({
       title: '批量归档',
       messageHtml: summaryHtml,
-      confirmText: skipped.length ? `归档 ${canArchive.length} 项` : '归档',
+      confirmText: `归档 ${totalArchiveCount} 项`,
     });
     if (!confirmed) return;
     try {
-      for (const t of canArchive) {
+      for (const t of archiveRoots) {
         await API.archiveNow(t.id);
       }
       await this.reload();
       this.exitBulkMode();
     } catch (e) {
-      alert('批量归档失败:' + window.__tauriErrMsg(e));
+      await this.confirmAction({
+        title: '批量归档失败',
+        messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
+        confirmText: '知道了',
+        hideCancel: true,
+        danger: true,
+      });
     }
   },
 
