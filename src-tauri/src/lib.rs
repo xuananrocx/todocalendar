@@ -104,6 +104,7 @@ pub struct Settings {
     pub close_on_outside_click: bool,
     pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
     pub stats_style: String, // text | chip | bar
+    pub clock_show_seconds: bool, // 顶部时钟显示秒数(隐藏日期,显示进度条)
 }
 
 impl Default for Settings {
@@ -152,6 +153,7 @@ impl Default for Settings {
             close_on_outside_click: true,
             weekend_color: "beige".into(),
             stats_style: "text".into(),
+            clock_show_seconds: false,
         }
     }
 }

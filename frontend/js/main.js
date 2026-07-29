@@ -382,19 +382,46 @@ const Main = {
 
   // 把 settings 应用到 <html> 根元素 (data-theme / data-font-size / data-compact / data-show-icons)
   startClock() {
-    const dateEl = document.querySelector('.time-clock-date');
-    const hmEl = document.querySelector('.time-clock-hm');
-    if (!dateEl || !hmEl) return;
+    const clockEl = document.getElementById('timeClock');
+    if (!clockEl) return;
+    const showSec = !!this.state?.settings?.clockShowSeconds;
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const update = () => {
-      const d = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      dateEl.textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
-      hmEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-    };
-    update();
-    if (this._clockTimer) clearInterval(this._clockTimer);
-    this._clockTimer = setInterval(update, 60000);
+    if (showSec) {
+      clockEl.classList.add('time-clock-seconds');
+      clockEl.innerHTML = `
+        <div class="time-clock-hm"></div>
+        <div class="time-clock-bar"><div class="time-clock-bar-fill"></div></div>
+      `;
+      const hmEl = clockEl.querySelector('.time-clock-hm');
+      const fillEl = clockEl.querySelector('.time-clock-bar-fill');
+      const update = () => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        hmEl.innerHTML = `${pad(d.getHours())}:${pad(d.getMinutes())}<span class="time-clock-sec">:${pad(d.getSeconds())}</span>`;
+        fillEl.style.width = `${(d.getSeconds() / 60) * 100}%`;
+      };
+      update();
+      if (this._clockTimer) clearInterval(this._clockTimer);
+      this._clockTimer = setInterval(update, 1000);
+    } else {
+      clockEl.classList.remove('time-clock-seconds');
+      clockEl.innerHTML = `
+        <span class="time-clock-date"></span>
+        <span class="time-clock-sep"></span>
+        <span class="time-clock-hm"></span>
+      `;
+      const dateEl = clockEl.querySelector('.time-clock-date');
+      const hmEl = clockEl.querySelector('.time-clock-hm');
+      const update = () => {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        dateEl.textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
+        hmEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      update();
+      if (this._clockTimer) clearInterval(this._clockTimer);
+      this._clockTimer = setInterval(update, 60000);
+    }
   },
 
   // ===== 批量模式 =====
@@ -990,6 +1017,9 @@ const Main = {
       if ('autoArchive' in patch || 'archiveAfterDays' in patch) {
         await this.checkArchiveDue();
       }
+      if ('clockShowSeconds' in patch) {
+        this.startClock();
+      }
     } catch (e) {
       // 回滚
       this.state.settings = before;
@@ -1421,6 +1451,7 @@ const Main = {
         <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示图标')}</div>
         <div class="settings-row">${this._toggle(!!s.showNumbering, 'showNumbering', '显示任务编号', '按当前顺序编号,父待办显示子任务数')}</div>
         <div class="settings-row">${this._toggle(s.showTimePrecision === true, 'showTimePrecision', '显示具体时间', '开启后所有时间显示精确到分钟,关闭则只显示日期')}</div>
+        <div class="settings-row">${this._toggle(!!s.clockShowSeconds, 'clockShowSeconds', '时钟显示秒数', '顶部时钟显示 HH:MM:SS,下方秒进度条(隐藏月日周几)')}</div>
         <div class="settings-row">
           <label class="settings-row-label">统计样式</label>
           ${this._seg([
