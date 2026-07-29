@@ -523,12 +523,20 @@ fn sync_parent_time(data: &mut Data, settings: &Settings, mut child_id: String) 
 fn create_todo(
     app: tauri::AppHandle,
     title: String,
-    parent_id: Option<String>,
+    mut parent_id: Option<String>,
     start_time: Option<String>,
     end_time: Option<String>,
 ) -> Todo {
     let file = data_file(&app);
     let mut data = load_data(&file);
+
+    if let Some(ref pid) = parent_id {
+        if let Some(parent) = data.todos.iter().find(|t| t.id == *pid) {
+            if parent.archived_at.is_some() {
+                parent_id = None;
+            }
+        }
+    }
 
     let max_order = data
         .todos
@@ -590,6 +598,11 @@ fn move_todo(
     if let Some(ref new_parent_id) = parent_id {
         if !data.todos.iter().any(|t| &t.id == new_parent_id) {
             return Err("目标父待办不存在".into());
+        }
+        if let Some(target) = data.todos.iter().find(|t| &t.id == new_parent_id) {
+            if target.archived_at.is_some() {
+                return Err("目标父待办已归档,不能移到其下".into());
+            }
         }
         let descendants = collect_descendants(&data.todos, &id);
         if descendants.contains(new_parent_id) {
@@ -655,7 +668,9 @@ fn move_todo(
     }
 
     save_data_checked(&file, &data)?;
-    Ok(data)
+    let mut result = data.clone();
+    result.todos.retain(|t| t.archived_at.is_none());
+    Ok(result)
 }
 
 /// patch 是任意字段的 JSON 对象,只更新提供的字段(null 也算"提供",会清空)
@@ -733,11 +748,11 @@ fn set_todo_done_recursive(app: tauri::AppHandle, id: String, done: bool) -> Vec
     let completed_at = done.then(now_iso);
     for t in data.todos.iter_mut() {
         if ids_set.contains(&t.id) {
+            if t.archived_at.is_some() {
+                continue;
+            }
             t.done = done;
             t.completed_at = completed_at.clone();
-            if !done {
-                t.archived_at = None;
-            }
         }
     }
     save_data(&file, &data);
@@ -804,7 +819,9 @@ fn set_todos_expanded(app: tauri::AppHandle, expanded: bool) -> Result<Data, Str
     }
 
     save_data_checked(&file, &data)?;
-    Ok(data)
+    let mut result = data.clone();
+    result.todos.retain(|t| t.archived_at.is_none());
+    Ok(result)
 }
 
 #[tauri::command]

@@ -364,7 +364,13 @@ const Main = {
       this.closeModal();
       await this.reload();
     } catch (e) {
-      alert('归档失败:' + window.__tauriErrMsg(e));
+      await this.confirmAction({
+        title: '归档失败',
+        messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
+        confirmText: '知道了',
+        hideCancel: true,
+        danger: true,
+      });
     }
   },
 
@@ -840,7 +846,13 @@ const Main = {
     } catch (e) {
       this.state.todos = before;
       Render.renderAll(this.state);
-      alert('移动失败:' + window.__tauriErrMsg(e));
+      await this.confirmAction({
+        title: '移动失败',
+        messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
+        confirmText: '知道了',
+        hideCancel: true,
+        danger: true,
+      });
     }
   },
 
