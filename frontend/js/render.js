@@ -615,6 +615,69 @@ const Render = {
       }
       row.appendChild(title);
 
+      const notesMode = settings.notesDisplay || 'none';
+      const hasNotes = !!(node.notes && node.notes.trim());
+      if (hasNotes && notesMode !== 'none') {
+        if (notesMode === 'hover') {
+          const ic = document.createElement('span');
+          ic.className = 'notes-icon';
+          ic.innerHTML = window.Icon.messageSquare();
+          row.appendChild(ic);
+          let hoverTimer = null;
+          let tipEl = null;
+          const showTip = () => {
+            hideTip();
+            const rect = title.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) return;
+            tipEl = document.createElement('div');
+            tipEl.className = 'notes-tooltip';
+            const head = document.createElement('div');
+            head.className = 'notes-tooltip-head';
+            head.textContent = '备注';
+            const body = document.createElement('div');
+            body.className = 'notes-tooltip-body';
+            body.textContent = node.notes;
+            tipEl.appendChild(head);
+            tipEl.appendChild(body);
+            document.body.appendChild(tipEl);
+            tipEl.style.top = (rect.bottom + 6 + window.scrollY) + 'px';
+            tipEl.style.left = (rect.left + window.scrollX) + 'px';
+          };
+          const hideTip = () => {
+            if (tipEl) { tipEl.remove(); tipEl = null; }
+          };
+          title.addEventListener('mouseenter', () => {
+            hoverTimer = setTimeout(showTip, 500);
+          });
+          title.addEventListener('mouseleave', () => {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hoverTimer = null;
+            hideTip();
+          });
+          title.addEventListener('click', () => {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hoverTimer = null;
+            hideTip();
+          }, true);
+        } else if (notesMode === 'inline' || notesMode === 'inline-plain') {
+          const wrap = document.createElement('span');
+          wrap.className = 'notes-inline-wrap';
+          const plain = (node.notes || '').replace(/[#*`>_\-\[\]\(\)!]/g, '').replace(/\s+/g, ' ').trim();
+          if (notesMode === 'inline') {
+            const badge = document.createElement('span');
+            badge.className = 'notes-inline-badge';
+            badge.textContent = '备注';
+            wrap.appendChild(badge);
+          }
+          const text = document.createElement('span');
+          text.className = 'notes-inline-text';
+          text.textContent = plain.length > 30 ? plain.slice(0, 30) + '…' : plain;
+          wrap.appendChild(text);
+          wrap.title = node.notes;
+          row.appendChild(wrap);
+        }
+      }
+
       if (settings.showNumbering && hasChildren) {
         const visibleKids = Render.getChildren(byParent, node.id)
           .filter(k => !(state.hideDone && k.done));

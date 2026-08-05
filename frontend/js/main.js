@@ -1606,6 +1606,13 @@ const Main = {
           ], s.statsStyle || 'text', 'statsStyle')}
           <div class="settings-row-desc">顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例</div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">备注展示方式</div>
+          ${this._seg([
+            {value:'none',label:'不展示'},{value:'hover',label:'悬浮预览'},{value:'inline',label:'内联摘要'},{value:'inline-plain',label:'内联简化'}
+          ], s.notesDisplay || 'none', 'notesDisplay')}
+          <div class="settings-row-desc">悬浮:鼠标移到标题上显示完整备注;内联摘要:带"备注"标签+前 30 字;内联简化:无标签的前 30 字</div>
+        </div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>
           ${this._seg([

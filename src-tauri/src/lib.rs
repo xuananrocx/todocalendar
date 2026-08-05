@@ -93,6 +93,7 @@ pub struct Settings {
     pub numbering_style: String,   // wbs | simple
     pub numbering_palette: String, // classic | morandi | ocean
     pub click_action: String,      // edit | expand
+    pub notes_display: String,     // none | hover | inline
     pub theme_color: String,       // clay | blue | cyan | red | ink | sunset | deep | aurora | flame
     pub show_time_precision: bool,
     pub app_icon: String,          // b | bf
@@ -145,6 +146,7 @@ impl Default for Settings {
             numbering_style: "simple".into(),
             numbering_palette: "classic".into(),
             click_action: "expand".into(),
+            notes_display: "none".into(),
             theme_color: "sunset".into(),
             show_time_precision: false,
             app_icon: "b".into(),
