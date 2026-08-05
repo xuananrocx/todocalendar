@@ -659,6 +659,23 @@ const Render = {
             hoverTimer = null;
             hideTip();
           }, true);
+          ic.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            try {
+              await navigator.clipboard.writeText(node.notes);
+            } catch (err) {}
+            hideTip();
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hoverTimer = null;
+            const toast = document.createElement('div');
+            toast.className = 'notes-copy-toast';
+            toast.textContent = '已复制备注信息';
+            document.body.appendChild(toast);
+            const r = ic.getBoundingClientRect();
+            toast.style.top = (r.bottom + 6 + window.scrollY) + 'px';
+            toast.style.left = (r.left + r.width / 2 + window.scrollX) + 'px';
+            setTimeout(() => toast.remove(), 1500);
+          });
         } else if (notesMode === 'inline' || notesMode === 'inline-plain') {
           const wrap = document.createElement('span');
           wrap.className = 'notes-inline-wrap';
