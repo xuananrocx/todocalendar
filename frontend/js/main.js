@@ -2844,7 +2844,7 @@ const Main = {
       toolbarConfig: { pin: true },
       cache: { enable: false },
       counter: { enable: false },
-      preview: { delay: 200 },
+      outline: { enable: false },
       placeholder: '支持 Markdown',
       value: initial,
       after: () => {
