@@ -146,7 +146,7 @@ impl Default for Settings {
             numbering_style: "simple".into(),
             numbering_palette: "classic".into(),
             click_action: "expand".into(),
-            notes_display: "none".into(),
+            notes_display: "hover".into(),
             theme_color: "sunset".into(),
             show_time_precision: false,
             app_icon: "b".into(),
@@ -166,7 +166,7 @@ impl Default for Settings {
             stats_style: "text".into(),
             clock_show_seconds: false,
             holiday_color: "none".into(),
-            holiday_auto_update: false,
+            holiday_auto_update: true,
             holiday_last_update: None,
         }
     }
