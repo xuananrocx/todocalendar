@@ -14,8 +14,8 @@ const API = {
     return await invoke('list_todos');
   },
   async create(body) {
-    const { title, parentId, startTime, endTime } = body;
-    return await invoke('create_todo', { title, parentId, startTime, endTime });
+    const { title, parentId, startTime, endTime, notes } = body;
+    return await invoke('create_todo', { title, parentId, startTime, endTime, notes: notes ?? null });
   },
   async update(id, body) {
     return await invoke('update_todo', { id, patch: body });

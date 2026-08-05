@@ -5,6 +5,8 @@
 <title>TodoCalendar</title>
 <link rel="stylesheet" href="css/style.css">
 <script src="js/lib/lunar.min.js"></script>
+<link rel="stylesheet" href="vendor/vditor/vditor.css">
+<script src="vendor/vditor/vditor.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -271,40 +273,52 @@
 
 <!-- 编辑弹窗 -->
 <div class="modal-mask" id="modalMask" hidden>
-  <div class="modal">
+  <div class="modal" id="todoModal">
     <h3 id="modalTitle">新建待办</h3>
-    <label>标题
-      <input type="text" id="fTitle" placeholder="想做什么?">
-    </label>
-    <label>
-      <div class="field-label-row">
-        <span>开始时间</span>
-        <span class="auto-time-badge" id="fStartAutoBadge" hidden title="由子代办自动同步">↺</span>
+    <div class="modal-body" id="modalBody">
+      <div class="modal-main">
+        <label class="fld-title">标题
+          <input type="text" id="fTitle" placeholder="想做什么?">
+        </label>
+        <button type="button" id="btnNotes" class="btn-notes" hidden>添加备注</button>
+        <label class="fld-start">
+          <div class="field-label-row">
+            <span>开始时间</span>
+            <span class="auto-time-badge" id="fStartAutoBadge" hidden title="由子代办自动同步">↺</span>
+          </div>
+          <div class="time-row">
+            <div class="input-wrap">
+              <input type="date" id="fStart">
+              <div class="picker-overlay" data-target="fStart"></div>
+            </div>
+            <button type="button" id="btnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+          </div>
+        </label>
+        <label class="fld-end">
+          <div class="field-label-row">
+            <span>结束时间</span>
+            <span class="auto-time-badge" id="fEndAutoBadge" hidden title="由子代办自动同步">↺</span>
+          </div>
+          <div class="time-row">
+            <div class="input-wrap">
+              <input type="date" id="fEnd">
+              <div class="picker-overlay" data-target="fEnd"></div>
+            </div>
+            <button type="button" id="btnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
+          </div>
+        </label>
+        <label class="fld-parent">父级
+          <select id="fParent"><option value="">(顶层)</option></select>
+        </label>
       </div>
-      <div class="time-row">
-        <div class="input-wrap">
-          <input type="date" id="fStart">
-          <div class="picker-overlay" data-target="fStart"></div>
+      <aside class="todo-notes-aside" id="todoNotesAside" hidden>
+        <div class="todo-notes-head">
+          <span>备注</span>
+          <button type="button" class="todo-notes-close" id="btnNotesClose" title="收起">×</button>
         </div>
-        <button type="button" id="btnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
-      </div>
-    </label>
-    <label>
-      <div class="field-label-row">
-        <span>结束时间</span>
-        <span class="auto-time-badge" id="fEndAutoBadge" hidden title="由子代办自动同步">↺</span>
-      </div>
-      <div class="time-row">
-        <div class="input-wrap">
-          <input type="date" id="fEnd">
-          <div class="picker-overlay" data-target="fEnd"></div>
-        </div>
-        <button type="button" id="btnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
-      </div>
-    </label>
-    <label>父级
-      <select id="fParent"><option value="">(顶层)</option></select>
-    </label>
+        <div id="fNotesEditor" class="todo-notes-editor"></div>
+      </aside>
+    </div>
     <div class="modal-actions">
       <button id="btnDelete" class="btn danger" hidden>删除</button>
       <button id="btnArchive" class="btn archive" hidden><i data-icon="archive"></i> 立即归档</button>

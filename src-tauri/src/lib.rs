@@ -37,6 +37,8 @@ pub struct Todo {
     pub archived_at: Option<String>,
     #[serde(default)]
     pub group_id: Option<String>,
+    #[serde(default)]
+    pub notes: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -863,6 +865,7 @@ fn create_todo(
     mut parent_id: Option<String>,
     start_time: Option<String>,
     end_time: Option<String>,
+    notes: Option<String>,
 ) -> Todo {
     let file = data_file(&app);
     let mut data = load_data(&file);
@@ -907,6 +910,7 @@ fn create_todo(
         completed_at: None,
         archived_at: None,
         group_id,
+        notes: notes.filter(|s| !s.trim().is_empty()),
     };
     let new_id = new.id.clone();
     data.todos.push(new.clone());

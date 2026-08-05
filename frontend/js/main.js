@@ -2078,6 +2078,8 @@ const Main = {
     document.getElementById('btnSave').onclick = () => this.saveModal();
     document.getElementById('btnDelete').onclick = () => this.deleteCurrent();
     document.getElementById('btnArchive').onclick = () => this.archiveCurrent();
+    document.getElementById('btnNotes').onclick = () => this.toggleNotesAside();
+    document.getElementById('btnNotesClose').onclick = () => this.toggleNotesAside();
     document.getElementById('btnStartClock').onclick = () => {
       const input = document.getElementById('fStart');
       const hasTime = input.type === 'datetime-local';
@@ -2396,6 +2398,7 @@ const Main = {
     }
     document.getElementById('btnDelete').hidden = true;
     document.getElementById('btnArchive').hidden = true;
+    this._resetNotes('');
     this.openModal();
   },
 
@@ -2810,10 +2813,104 @@ const Main = {
     btnArchive.hidden = false;
     btnArchive.disabled = !t.done;
     btnArchive.title = t.done ? '' : '未完成的待办不允许归档';
+    this._resetNotes(t.notes || '');
     this.openModal();
   },
 
-  openModal() {
+  _notesEditor: null,
+  _notesEditorReady: false,
+  _pendingNotesValue: '',
+
+  _ensureNotesEditor() {
+    if (this._notesEditor) return this._notesEditor;
+    if (typeof Vditor === 'undefined') {
+      console.warn('Vditor not loaded');
+      return null;
+    }
+    const initial = this._pendingNotesValue || '';
+    this._notesEditorReady = false;
+    this._notesEditor = new Vditor('fNotesEditor', {
+      mode: 'wysiwyg',
+      height: 220,
+      minHeight: 160,
+      toolbar: ['bold', 'list', 'ordered-list'],
+      toolbarConfig: { pin: true },
+      cache: { enable: false },
+      counter: { enable: false },
+      preview: { delay: 200 },
+      placeholder: '支持 Markdown',
+      value: initial,
+      after: () => {
+        this._notesEditorReady = true;
+        if (initial) this._notesEditor.setValue(initial);
+      },
+      input: () => this._updateNotesButton(),
+    });
+    return this._notesEditor;
+  },
+
+  _destroyNotesEditor() {
+    if (this._notesEditor) {
+      try { this._notesEditor.destroy(); } catch (e) {}
+      this._notesEditor = null;
+      this._notesEditorReady = false;
+    }
+  },
+
+  _resetNotes(initialValue) {
+    const btn = document.getElementById('btnNotes');
+    const aside = document.getElementById('todoNotesAside');
+    const modal = document.getElementById('todoModal');
+    this._destroyNotesEditor();
+    this._pendingNotesValue = initialValue || '';
+    const hasContent = initialValue && initialValue.trim().length > 0;
+    btn.hidden = false;
+    if (hasContent) {
+      aside.hidden = false;
+      modal.classList.add('notes-open');
+      btn.textContent = '编辑备注';
+      btn.classList.add('has-notes');
+      this._ensureNotesEditor();
+    } else {
+      aside.hidden = true;
+      modal.classList.remove('notes-open');
+      btn.textContent = '添加备注';
+      btn.classList.remove('has-notes');
+    }
+  },
+
+  _updateNotesButton() {
+    const btn = document.getElementById('btnNotes');
+    const value = this._notesEditor ? this._notesEditor.getValue() : '';
+    const hasContent = value && value.trim().length > 0;
+    if (hasContent) {
+      btn.textContent = '编辑备注';
+      btn.classList.add('has-notes');
+    } else {
+      btn.textContent = '添加备注';
+      btn.classList.remove('has-notes');
+    }
+  },
+
+  toggleNotesAside() {
+    const aside = document.getElementById('todoNotesAside');
+    const modal = document.getElementById('todoModal');
+    const btn = document.getElementById('btnNotes');
+    if (aside.hidden) {
+      aside.hidden = false;
+      modal.classList.add('notes-open');
+      btn.textContent = '编辑备注';
+      this._ensureNotesEditor();
+    } else {
+      if (this._notesEditor) this._pendingNotesValue = this._notesEditor.getValue();
+      aside.hidden = true;
+      modal.classList.remove('notes-open');
+      this._destroyNotesEditor();
+      this._updateNotesButton();
+    }
+  },
+
+  openModal(state) {
     document.getElementById('modalMask').hidden = false;
     setTimeout(() => {
       if (document.getElementById('confirmMask').hidden) {
@@ -2825,6 +2922,12 @@ const Main = {
   closeModal() {
     document.getElementById('modalMask').hidden = true;
     this.editingId = null;
+    this._destroyNotesEditor();
+    this._pendingNotesValue = '';
+    const aside = document.getElementById('todoNotesAside');
+    const modal = document.getElementById('todoModal');
+    if (aside) aside.hidden = true;
+    if (modal) modal.classList.remove('notes-open');
   },
 
   async saveModal() {
@@ -2858,6 +2961,8 @@ const Main = {
       endTime: this._readInput('fEnd'),
       parentId,
     };
+    const notesRaw = this._notesEditor ? this._notesEditor.getValue() : (this._pendingNotesValue || '');
+    body.notes = notesRaw && notesRaw.trim() ? notesRaw : null;
 
     try {
       if (this.editingId) await API.update(this.editingId, body);
