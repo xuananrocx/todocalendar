@@ -2888,7 +2888,9 @@ const Main = {
 
   _updateNotesButton() {
     const btn = document.getElementById('btnNotes');
-    const value = this._notesEditor ? this._notesEditor.getValue() : '';
+    const value = this._notesEditor
+      ? this._notesEditor.getValue()
+      : (this._pendingNotesValue || '');
     const hasContent = value && value.trim().length > 0;
     if (hasContent) {
       btn.textContent = '编辑备注';
