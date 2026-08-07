@@ -1423,6 +1423,67 @@ const Render = {
       const completed = parseTime(todo.completedAt);
       const archived = parseTime(todo.archivedAt);
       time.textContent = `完成 ${formatDateTime(completed)} · 归档 ${formatDateTime(archived)}`;
+      const nodeNotesMode = (state.settings && state.settings.notesDisplay) || 'none';
+      const todoNotes = (todo.notes && todo.notes.trim()) ? todo.notes : null;
+      let notesIcon = null;
+      if (todoNotes && nodeNotesMode !== 'none') {
+        notesIcon = document.createElement('span');
+        notesIcon.className = 'notes-icon history-node-notes-icon';
+        notesIcon.innerHTML = window.Icon.messageSquare();
+        let hoverTimer = null;
+        let tipEl = null;
+        const showTip = () => {
+          hideTip();
+          const rect = title.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          tipEl = document.createElement('div');
+          tipEl.className = 'notes-tooltip';
+          const head = document.createElement('div');
+          head.className = 'notes-tooltip-head';
+          head.textContent = '备注';
+          const tipBody = document.createElement('div');
+          tipBody.className = 'notes-tooltip-body';
+          tipBody.textContent = todoNotes;
+          tipEl.appendChild(head);
+          tipEl.appendChild(tipBody);
+          document.body.appendChild(tipEl);
+          tipEl.style.top = (rect.bottom + 6 + window.scrollY) + 'px';
+          tipEl.style.left = (rect.left + window.scrollX) + 'px';
+        };
+        const hideTip = () => {
+          if (tipEl) { tipEl.remove(); tipEl = null; }
+        };
+        title.addEventListener('mouseenter', () => {
+          hoverTimer = setTimeout(showTip, 500);
+        });
+        title.addEventListener('mouseleave', () => {
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          hideTip();
+        });
+        title.addEventListener('click', () => {
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          hideTip();
+        }, true);
+        notesIcon.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(todoNotes);
+          } catch (err) {}
+          hideTip();
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          const toast = document.createElement('div');
+          toast.className = 'notes-copy-toast';
+          toast.textContent = '已复制备注信息';
+          document.body.appendChild(toast);
+          const r = notesIcon.getBoundingClientRect();
+          toast.style.top = (r.bottom + 6 + window.scrollY) + 'px';
+          toast.style.left = (r.left + r.width / 2 + window.scrollX) + 'px';
+          setTimeout(() => toast.remove(), 1500);
+        });
+      }
       const actions = document.createElement('span');
       actions.className = 'history-node-actions';
       const restore = document.createElement('button');
@@ -1437,7 +1498,7 @@ const Render = {
       remove.onclick = () => Main.deleteArchived(todo.id);
       actions.append(restore, remove);
 
-      node.append(dot, title, time, actions);
+      node.append(dot, title, ...(notesIcon ? [notesIcon] : []), time, actions);
       container.appendChild(node);
 
       const kids = childrenOf.get(todo.id) || [];
@@ -1483,6 +1544,67 @@ const Render = {
         tag.className = 'unarchived-tag';
         tag.textContent = '未归档';
         headTitle.appendChild(tag);
+      }
+      const notesMode = (state.settings && state.settings.notesDisplay) || 'none';
+      const rootNotes = (root.notes && root.notes.trim()) ? root.notes : null;
+      if (rootNotes && notesMode !== 'none') {
+        const ic = document.createElement('span');
+        ic.className = 'notes-icon history-card-notes-icon';
+        ic.innerHTML = window.Icon.messageSquare();
+        let hoverTimer = null;
+        let tipEl = null;
+        const showTip = () => {
+          hideTip();
+          const rect = headTitle.getBoundingClientRect();
+          if (rect.width === 0 || rect.height === 0) return;
+          tipEl = document.createElement('div');
+          tipEl.className = 'notes-tooltip';
+          const head = document.createElement('div');
+          head.className = 'notes-tooltip-head';
+          head.textContent = '备注';
+          const tipBody = document.createElement('div');
+          tipBody.className = 'notes-tooltip-body';
+          tipBody.textContent = rootNotes;
+          tipEl.appendChild(head);
+          tipEl.appendChild(tipBody);
+          document.body.appendChild(tipEl);
+          tipEl.style.top = (rect.bottom + 6 + window.scrollY) + 'px';
+          tipEl.style.left = (rect.left + window.scrollX) + 'px';
+        };
+        const hideTip = () => {
+          if (tipEl) { tipEl.remove(); tipEl = null; }
+        };
+        headTitle.addEventListener('mouseenter', () => {
+          hoverTimer = setTimeout(showTip, 500);
+        });
+        headTitle.addEventListener('mouseleave', () => {
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          hideTip();
+        });
+        headTitle.addEventListener('click', () => {
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          hideTip();
+        }, true);
+        ic.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          try {
+            await navigator.clipboard.writeText(rootNotes);
+          } catch (err) {}
+          hideTip();
+          if (hoverTimer) clearTimeout(hoverTimer);
+          hoverTimer = null;
+          const toast = document.createElement('div');
+          toast.className = 'notes-copy-toast';
+          toast.textContent = '已复制备注信息';
+          document.body.appendChild(toast);
+          const r = ic.getBoundingClientRect();
+          toast.style.top = (r.bottom + 6 + window.scrollY) + 'px';
+          toast.style.left = (r.left + r.width / 2 + window.scrollX) + 'px';
+          setTimeout(() => toast.remove(), 1500);
+        });
+        headTitle.appendChild(ic);
       }
       const headMeta = document.createElement('div');
       headMeta.className = 'history-card-meta';
