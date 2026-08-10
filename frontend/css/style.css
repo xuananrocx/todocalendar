@@ -375,7 +375,7 @@ body.bulk-mode .drag-handle { display: none; }
 .cal-cell.other-month { opacity: .35; }
 .cal-cell.weekend.yellow { background: linear-gradient(135deg, #fafaf9 0%, #f5f5f4 50%, #e7e5e4 100%); color: #44403c; }
 .cal-cell.weekend.pink { background: #fce7f3; }
-.cal-cell.weekend.blue { background: linear-gradient(135deg, #fafaf9 0%, #d6d3d1 50%, #a8a29e 100%); color: #44403c; }
+.cal-cell.weekend.blue { background: linear-gradient(135deg, #fafaf9 0%, #f8fafc 33%, #f1f5f9 66%, #e2e8f0 100%); color: #334155; }
 .cal-cell.weekend.green { background: #d1fae5; }
 .cal-cell.weekend.beige { background: #fafaf9; }
 .cal-cell.weekend.peach { background: #ffedd5; }
@@ -400,7 +400,7 @@ body.bulk-mode .drag-handle { display: none; }
 }
 [data-theme="dark"] .cal-cell.weekend.pink .cal-date { color: #fbcfe8; }
 [data-theme="dark"] .cal-cell.weekend.blue {
-  background: linear-gradient(135deg, #44403c 0%, #57534e 50%, #a8a29e 100%);
+  background: linear-gradient(135deg, #1e293b 0%, #334155 33%, #475569 66%, #64748b 100%);
 }
 [data-theme="dark"] .cal-cell.weekend.blue .cal-date { color: #d1d5db; }
 [data-theme="dark"] .cal-cell.weekend.green {
@@ -2236,6 +2236,14 @@ body.bulk-mode .drag-handle { display: none; }
   background: var(--hover-bg); padding: 0 4px;
   border-radius: 3px; opacity: .7;
 }
+.cal-working-day {
+  position: absolute; top: 6px; right: 4px;
+  font-size: 10px; font-weight: 600; color: #fff;
+  background: #dc2626; padding: 0 5px;
+  border-radius: 3px; line-height: 1.4;
+  z-index: 1;
+}
+[data-theme="dark"] .cal-working-day { background: #ef4444; }
 
 /* ===== 字体颜色预设(default/warm1/warm2/warm3) =====
    优先级递增:浅色 default < 深色 default < 浅色 warm < 深色 warm */

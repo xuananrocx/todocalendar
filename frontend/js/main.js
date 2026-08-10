@@ -1666,10 +1666,10 @@ const Main = {
           <div class="settings-row-label">周末窗格颜色</div>
           <div class="color-picker" data-onchange="weekendColor">
             ${this._colorSwatch('none', '无', '#ffffff', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('yellow', '茶白', '#fafaf9', '#e7e5e4', s.weekendColor || 'none')}
-            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('blue', '檀光', '#fafaf9', '#a8a29e', s.weekendColor || 'none')}
             ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('blue', '鱼肚白', '#fafaf9', '#e2e8f0', s.weekendColor || 'none')}
+            ${this._colorSwatch('yellow', '茶白', '#fafaf9', '#e7e5e4', s.weekendColor || 'none')}
             ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.weekendColor || 'none')}
             ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.weekendColor || 'none')}
             ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.weekendColor || 'none')}

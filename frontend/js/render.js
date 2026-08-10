@@ -906,6 +906,15 @@ const Render = {
         cell.appendChild(wn);
       }
 
+      // 调休上班日角标
+      if (isWorkingdayOverride) {
+        const wd = document.createElement('div');
+        wd.className = 'cal-working-day';
+        wd.textContent = '班';
+        wd.title = `${holiday.name} · 调休上班`;
+        cell.appendChild(wd);
+      }
+
       const dateEl = document.createElement('div');
       dateEl.className = 'cal-date';
       dateEl.textContent = c.date.getDate();
