@@ -1621,6 +1621,7 @@ const Main = {
           ], s.priorityHighlight || 'tag', 'priorityHighlight')}
           <div class="settings-row-desc">优先待办的视觉强调方式:图标=🔥静态;动态=🔥日落渐变光晕动画(2s);标签=橙底"优先"标签;背景=浅黄底</div>
         </div>
+        <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>
           ${this._seg([
@@ -1753,7 +1754,6 @@ const Main = {
           <div class="settings-row-desc">跨层模式下拖到条目中部可将其设为子待办。自动模式下跨层也要求同截止日期</div>
         </div>
         <div class="settings-row">${this._toggle(!!s.autoCollapseDone, 'autoCollapseDone', '勾选后折叠', '勾选完成时自动折叠该待办')}</div>
-        <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
         <div class="settings-row">
           <div class="settings-row-label">待办点击行为</div>
           ${this._seg([
