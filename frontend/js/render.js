@@ -12,7 +12,7 @@ const Render = {
   },
 
   // 构建树:{ id -> children[] }
-  buildTree(todos, sortMode = 'manual') {
+  buildTree(todos, sortMode = 'manual', settings = null) {
     const byParent = new Map();
     const positions = new Map();
     for (const [position, t] of todos.entries()) {
@@ -28,6 +28,7 @@ const Render = {
 
     if (sortMode === 'auto') {
       const now = Date.now();
+      const autoTop = settings?.priorityAutoTop !== false;
       const parseDeadline = (todo) => {
         const refIso = todo.endTime || todo.startTime;
         if (!refIso) return null;
@@ -40,14 +41,23 @@ const Render = {
       };
       const deadlineRank = (todo, deadline) => {
         if (todo.done) return 5;
-        if (deadline === null) return 4;
+        if (todo.suspendedAt) return 4;
+        if (deadline === null) return 3;
         const remaining = deadline - now;
         if (remaining < 0) return 0;
         if (remaining <= 24 * 60 * 60 * 1000) return 1;
         if (remaining <= 48 * 60 * 60 * 1000) return 2;
         return 3;
       };
+      const bigRank = (todo) => {
+        if (todo.done) return 3;
+        if (todo.suspendedAt) return 2;
+        if (autoTop && todo.isPriority) return 0;
+        return 1;
+      };
       const autoCompare = (a, b) => {
+        const bigDiff = bigRank(a) - bigRank(b);
+        if (bigDiff !== 0) return bigDiff;
         const aDeadline = parseDeadline(a);
         const bDeadline = parseDeadline(b);
         const rankDiff = deadlineRank(a, aDeadline) - deadlineRank(b, bDeadline);
@@ -220,12 +230,14 @@ const Render = {
 
   isOverdue(t, now = new Date()) {
     if (t.done) return false;
+    if (t.suspendedAt) return false;
     const deadline = Render.getDeadline(t);
     return deadline ? deadline < now : false;
   },
 
   deadlineClass(t, now = new Date()) {
     if (t.done) return '';
+    if (t.suspendedAt) return '';
     const deadline = Render.getDeadline(t);
     if (!deadline) return '';
     const remaining = deadline.getTime() - now.getTime();
@@ -388,7 +400,7 @@ const Render = {
     const todos = allTodos || state.todos;
     const sortMode = state.settings?.sortMode || 'auto';
     const dragDisabled = state.hideDone;
-    const byParent = Render.buildTree(todos, sortMode);
+    const byParent = Render.buildTree(todos, sortMode, state.settings);
     const today = new Date();
     let dragId = null;
     let blockedDropIds = new Set();
@@ -588,6 +600,13 @@ const Render = {
       row.appendChild(cb);
 
       const settings = state.settings || {};
+      const isPriority = !!node.isPriority;
+      const isSuspended = !!node.suspendedAt;
+      if (isPriority) row.classList.add('is-priority');
+      if (isSuspended) row.classList.add('is-suspended');
+      if (isPriority && settings.priorityHighlight && settings.priorityHighlight !== 'none') {
+        row.classList.add('priority-' + settings.priorityHighlight);
+      }
       if (settings.showNumbering && path.length > 0) {
         const pill = document.createElement('span');
         const wbsStyle = settings.numberingStyle === 'wbs';
@@ -614,6 +633,13 @@ const Render = {
         row.style.cursor = 'pointer';
       }
       row.appendChild(title);
+
+      if (isPriority && settings.priorityHighlight === 'icon') {
+        const star = document.createElement('span');
+        star.className = 'priority-star';
+        star.textContent = '⭐';
+        row.insertBefore(star, title);
+      }
 
       const notesMode = settings.notesDisplay || 'none';
       const hasNotes = !!(node.notes && node.notes.trim());
@@ -704,11 +730,23 @@ const Render = {
         row.appendChild(badge);
       }
 
+      if (isSuspended) {
+        const susTag = document.createElement('span');
+        susTag.className = 'time-tag suspended-tag';
+        susTag.textContent = '搁置';
+        row.appendChild(susTag);
+      } else if (isPriority && settings.priorityHighlight === 'tag') {
+        const priTag = document.createElement('span');
+        priTag.className = 'time-tag priority-tag';
+        priTag.textContent = '优先';
+        row.appendChild(priTag);
+      }
+
       const tag = Render.formatTimeTag(node, today);
       if (tag) {
         const t = document.createElement('span');
         t.className = 'time-tag';
-        if (node.done) {
+        if (node.done || isSuspended) {
           t.classList.add('done');
         } else {
           const deadlineClass = Render.deadlineClass(node, today);

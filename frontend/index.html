@@ -310,6 +310,18 @@
         <label class="fld-parent">父级
           <select id="fParent"><option value="">(顶层)</option></select>
         </label>
+        <div class="fld-flags">
+          <label class="flag-toggle" title="搁置待办(含父子节点)">
+            <input type="checkbox" id="fSuspended">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">搁置待办</span>
+          </label>
+          <label class="flag-toggle" title="优先待办(含父子节点)">
+            <input type="checkbox" id="fPriority">
+            <span class="toggle-track"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">优先待办</span>
+          </label>
+        </div>
       </div>
       <aside class="todo-notes-aside" id="todoNotesAside" hidden>
         <div class="todo-notes-head">

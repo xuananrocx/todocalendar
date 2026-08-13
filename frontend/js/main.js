@@ -1613,6 +1613,13 @@ const Main = {
           ], s.notesDisplay || 'none', 'notesDisplay')}
           <div class="settings-row-desc">悬浮:鼠标移到标题上显示完整备注;内联摘要:带"备注"标签+前 30 字;内联简化:无标签的前 30 字</div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">优先待办高亮</div>
+          ${this._seg([
+            {value:'none',label:'不高亮'},{value:'icon',label:'图标'},{value:'tag',label:'标签'},{value:'bg',label:'背景'}
+          ], s.priorityHighlight || 'tag', 'priorityHighlight')}
+          <div class="settings-row-desc">优先待办的视觉强调方式:图标=⭐;标签=金黄"优先"标签;背景=浅黄底</div>
+        </div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>
           ${this._seg([
@@ -1745,6 +1752,7 @@ const Main = {
           <div class="settings-row-desc">跨层模式下拖到条目中部可将其设为子待办。自动模式下跨层也要求同截止日期</div>
         </div>
         <div class="settings-row">${this._toggle(!!s.autoCollapseDone, 'autoCollapseDone', '勾选后折叠', '勾选完成时自动折叠该待办')}</div>
+        <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
         <div class="settings-row">
           <div class="settings-row-label">待办点击行为</div>
           ${this._seg([
@@ -2087,6 +2095,14 @@ const Main = {
     document.getElementById('btnArchive').onclick = () => this.archiveCurrent();
     document.getElementById('btnNotes').onclick = () => this.toggleNotesAside();
     document.getElementById('btnNotesClose').onclick = () => this.toggleNotesAside();
+    const fSuspended = document.getElementById('fSuspended');
+    const fPriority = document.getElementById('fPriority');
+    fSuspended.addEventListener('change', () => {
+      if (fSuspended.checked && fPriority.checked) fPriority.checked = false;
+    });
+    fPriority.addEventListener('change', () => {
+      if (fSuspended.checked && fPriority.checked) fSuspended.checked = false;
+    });
     document.getElementById('btnStartClock').onclick = () => {
       const input = document.getElementById('fStart');
       const hasTime = input.type === 'datetime-local';
@@ -2389,6 +2405,9 @@ const Main = {
     document.getElementById('fTitle').value = '';
     this._writeInput('fStart', null);
     this._writeInput('fEnd', null);
+    document.getElementById('fSuspended').checked = false;
+    document.getElementById('fPriority').checked = false;
+    document.querySelector('.fld-flags').hidden = true;
     const startBadge = document.getElementById('fStartAutoBadge');
     const endBadge = document.getElementById('fEndAutoBadge');
     if (startBadge) startBadge.hidden = true;
@@ -2815,6 +2834,9 @@ const Main = {
     }
     this.refreshParentSelect(id);
     if (t.parentId) document.getElementById('fParent').value = t.parentId;
+    document.getElementById('fSuspended').checked = !!t.suspendedAt;
+    document.getElementById('fPriority').checked = !!t.isPriority;
+    document.querySelector('.fld-flags').hidden = false;
     document.getElementById('btnDelete').hidden = false;
     const btnArchive = document.getElementById('btnArchive');
     btnArchive.hidden = false;
@@ -2976,6 +2998,17 @@ const Main = {
     try {
       if (this.editingId) await API.update(this.editingId, body);
       else await API.create(body);
+      if (this.editingId) {
+        const wantSuspended = document.getElementById('fSuspended').checked;
+        const wantPriority = document.getElementById('fPriority').checked;
+        const cur = this.state.todos.find(x => x.id === this.editingId);
+        if (cur && !!cur.suspendedAt !== wantSuspended) {
+          await window.__TAURI__.core.invoke('set_suspended', { id: this.editingId, suspended: wantSuspended });
+        }
+        if (cur && !!cur.isPriority !== wantPriority) {
+          await window.__TAURI__.core.invoke('set_priority', { id: this.editingId, priority: wantPriority });
+        }
+      }
       this.closeModal();
       await this.reload();
     } catch (e) {

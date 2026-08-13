@@ -916,6 +916,79 @@ body.bulk-mode .drag-handle { display: none; }
   background: var(--deadline-safe-bg);
   color: var(--deadline-safe-text);
 }
+.time-tag.suspended-tag {
+  background: rgba(71, 85, 105, .10);
+  color: #64748b;
+  font-weight: 400;
+}
+.time-tag.priority-tag {
+  background: rgba(234, 179, 8, .15);
+  color: #a16207;
+  font-weight: 400;
+}
+[data-theme="dark"] .time-tag.suspended-tag {
+  background: rgba(148, 163, 184, .14);
+  color: #94a3b8;
+}
+[data-theme="dark"] .time-tag.priority-tag {
+  background: rgba(234, 179, 8, .20);
+  color: #fbbf24;
+}
+
+.priority-star {
+  color: #eab308;
+  font-size: 12px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.node.is-priority.priority-bg {
+  background: #fef3c7;
+}
+[data-theme="dark"] .node.is-priority.priority-bg { background: rgba(234, 179, 8, .14); }
+
+.fld-flags {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 6px 0 4px;
+  padding-left: 4px;
+  align-items: center;
+}
+.modal .fld-flags .flag-toggle {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  font-size: 10px; color: var(--muted);
+  cursor: pointer; user-select: none; margin: 0;
+}
+.modal .fld-flags .flag-toggle input {
+  position: absolute; opacity: 0; pointer-events: none;
+  width: 0; height: 0;
+}
+.modal .fld-flags .toggle-track {
+  width: 36px; height: 20px;
+  background: #cbd5e1;
+  border-radius: 9px;
+  position: relative;
+  flex-shrink: 0;
+  transition: background .15s;
+}
+.modal .fld-flags .toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 16px; height: 16px;
+  background: #fff;
+  border-radius: 7px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  transition: left .15s;
+}
+.modal .fld-flags .flag-toggle input:checked + .toggle-track {
+  background: var(--primary);
+}
+.modal .fld-flags .flag-toggle input:checked + .toggle-track .toggle-thumb {
+  left: 18px;
+}
+.modal .fld-flags .toggle-text { line-height: 1.2; }
 
 .add-sub {
   width: 24px; height: 24px;
@@ -2239,11 +2312,15 @@ body.bulk-mode .drag-handle { display: none; }
 .cal-working-day {
   position: absolute; top: 6px; right: 4px;
   font-size: 10px; font-weight: 600; color: #fff;
-  background: #dc2626; padding: 0 5px;
-  border-radius: 3px; line-height: 1.4;
+  background: #ea580c; padding: 0 5px;
+  border-radius: 3px; line-height: 1;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   z-index: 1;
 }
-[data-theme="dark"] .cal-working-day { background: #ef4444; }
+[data-theme="dark"] .cal-working-day { background: #f97316; }
 
 /* ===== 字体颜色预设(default/warm1/warm2/warm3) =====
    优先级递增:浅色 default < 深色 default < 浅色 warm < 深色 warm */

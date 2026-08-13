@@ -39,6 +39,10 @@ pub struct Todo {
     pub group_id: Option<String>,
     #[serde(default)]
     pub notes: Option<String>,
+    #[serde(default)]
+    pub suspended_at: Option<String>,
+    #[serde(default)]
+    pub is_priority: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -115,6 +119,8 @@ pub struct Settings {
     pub holiday_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
     pub holiday_auto_update: bool,
     pub holiday_last_update: Option<String>,
+    pub priority_highlight: String, // none | icon | bar | bg | full
+    pub priority_auto_top: bool,    // 自动排序模式下优先待办置顶
 }
 
 impl Default for Settings {
@@ -168,6 +174,8 @@ impl Default for Settings {
             holiday_color: "none".into(),
             holiday_auto_update: true,
             holiday_last_update: None,
+            priority_highlight: "tag".into(),
+            priority_auto_top: true,
         }
     }
 }
@@ -624,6 +632,28 @@ fn collect_descendants(todos: &[Todo], root: &str) -> Vec<String> {
     result
 }
 
+fn find_root_id(todos: &[Todo], id: &str) -> String {
+    let mut cur_id = id.to_string();
+    let mut seen = std::collections::HashSet::new();
+    seen.insert(cur_id.clone());
+    loop {
+        let cur = todos.iter().find(|t| t.id == cur_id);
+        match cur.and_then(|t| t.parent_id.as_ref()) {
+            Some(pid) if !seen.contains(pid) && todos.iter().any(|t| t.id == *pid) => {
+                seen.insert(pid.clone());
+                cur_id = pid.clone();
+            }
+            _ => break,
+        }
+    }
+    cur_id
+}
+
+fn collect_tree_ids(todos: &[Todo], id: &str) -> Vec<String> {
+    let root = find_root_id(todos, id);
+    collect_descendants(todos, &root)
+}
+
 fn filtered_data(data: &Data, archived: bool) -> Data {
     let mut filtered = data.clone();
     filtered
@@ -913,6 +943,8 @@ fn create_todo(
         archived_at: None,
         group_id,
         notes: notes.filter(|s| !s.trim().is_empty()),
+        suspended_at: None,
+        is_priority: None,
     };
     let new_id = new.id.clone();
     data.todos.push(new.clone());
@@ -1134,6 +1166,46 @@ fn restore_archived_todo(app: tauri::AppHandle, id: String) -> Result<Vec<String
     let restored_ids = restore_archived_branch(&mut data, &id)?;
     save_data_checked(&file, &data)?;
     Ok(restored_ids)
+}
+
+#[tauri::command]
+fn set_suspended(app: tauri::AppHandle, id: String, suspended: bool) -> Result<Vec<String>, String> {
+    let file = data_file(&app);
+    let mut data = load_data(&file);
+    let tree_ids = collect_tree_ids(&data.todos, &id);
+    let ts = if suspended { Some(now_iso()) } else { None };
+    let mut affected = Vec::new();
+    for t in data.todos.iter_mut() {
+        if tree_ids.contains(&t.id) {
+            t.suspended_at = ts.clone();
+            if suspended {
+                t.is_priority = None;
+            }
+            affected.push(t.id.clone());
+        }
+    }
+    save_data_checked(&file, &data)?;
+    Ok(affected)
+}
+
+#[tauri::command]
+fn set_priority(app: tauri::AppHandle, id: String, priority: bool) -> Result<Vec<String>, String> {
+    let file = data_file(&app);
+    let mut data = load_data(&file);
+    let tree_ids = collect_tree_ids(&data.todos, &id);
+    let p = if priority { Some(true) } else { None };
+    let mut affected = Vec::new();
+    for t in data.todos.iter_mut() {
+        if tree_ids.contains(&t.id) {
+            t.is_priority = p;
+            if priority {
+                t.suspended_at = None;
+            }
+            affected.push(t.id.clone());
+        }
+    }
+    save_data_checked(&file, &data)?;
+    Ok(affected)
 }
 
 #[tauri::command]
@@ -1461,6 +1533,8 @@ pub fn run() {
             archive_due_todos,
             archive_todo,
             restore_archived_todo,
+            set_suspended,
+            set_priority,
             delete_archived_todo,
             set_todos_expanded,
             list_settings,
