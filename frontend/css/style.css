@@ -922,24 +922,39 @@ body.bulk-mode .drag-handle { display: none; }
   font-weight: 400;
 }
 .time-tag.priority-tag {
-  background: rgba(234, 179, 8, .15);
-  color: #a16207;
-  font-weight: 400;
+  background: #ea580c;
+  color: #fff;
+  font-weight: 600;
 }
 [data-theme="dark"] .time-tag.suspended-tag {
   background: rgba(148, 163, 184, .14);
   color: #94a3b8;
 }
 [data-theme="dark"] .time-tag.priority-tag {
-  background: rgba(234, 179, 8, .20);
-  color: #fbbf24;
+  background: #f97316;
+  color: #fff;
 }
 
 .priority-star {
-  color: #eab308;
-  font-size: 12px;
+  color: #ea580c;
+  font-size: 14px;
   flex-shrink: 0;
   line-height: 1;
+}
+.priority-fire-wrap {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+.priority-fire-canvas {
+  width: 34px;
+  height: 28px;
+  display: block;
+}
+.node:has(.priority-fire-canvas):hover {
+  background: linear-gradient(90deg, rgba(255, 237, 213, .45), rgba(254, 202, 202, .35));
 }
 .node.is-priority.priority-bg {
   background: #fef3c7;

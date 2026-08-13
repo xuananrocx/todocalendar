@@ -1616,9 +1616,9 @@ const Main = {
         <div class="settings-row">
           <div class="settings-row-label">优先待办高亮</div>
           ${this._seg([
-            {value:'none',label:'不高亮'},{value:'icon',label:'图标'},{value:'tag',label:'标签'},{value:'bg',label:'背景'}
+            {value:'none',label:'不高亮'},{value:'icon',label:'图标'},{value:'animate',label:'动态'},{value:'tag',label:'标签'},{value:'bg',label:'背景'}
           ], s.priorityHighlight || 'tag', 'priorityHighlight')}
-          <div class="settings-row-desc">优先待办的视觉强调方式:图标=⭐;标签=金黄"优先"标签;背景=浅黄底</div>
+          <div class="settings-row-desc">优先待办的视觉强调方式:图标=🔥静态;动态=🔥日落渐变光晕动画(2s);标签=橙底"优先"标签;背景=浅黄底</div>
         </div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>

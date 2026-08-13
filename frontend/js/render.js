@@ -1,3 +1,80 @@
+const FireFX = {
+  W: 84, H: 70,
+  mount(canvas, hoverTarget) {
+    const ctx = canvas.getContext('2d');
+    const ps = [];
+    let it = 1, t = 0;
+    const k = Math.sqrt;
+    const W = this.W, H = this.H;
+    const spawn = (sk) => {
+      const a = Math.random() * Math.PI * 2;
+      const r = Math.random() * (sk ? 3 : 11);
+      ps.push({
+        x: W/2 + Math.cos(a) * r * k(it),
+        y: H - 7 - Math.random() * 4,
+        vx: (Math.random() - .5) * (sk ? 1.8 : .85) * k(it),
+        vy: -(Math.random() * (sk ? 2.2 : 1.05) + .3) * k(it),
+        life: 1,
+        dk: sk ? .06 : (.032 + Math.random() * .02) / it,
+        sz: (sk ? 2.2 : Math.random() * 6 + 5) * k(it),
+        sd: Math.random() * 10,
+        sk: !!sk
+      });
+    };
+    const drawFrame = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.globalCompositeOperation = 'lighter';
+      for (let i = ps.length - 1; i >= 0; i--) {
+        const p = ps[i];
+        p.x += Math.sin(p.y * .09 + p.sd) * .5;
+        p.x += p.vx * .35;
+        p.y += p.vy;
+        p.vy *= .995;
+        p.life -= p.dk;
+        if (p.life <= 0) { ps.splice(i, 1); continue; }
+        const h = 8 + p.life * 42;
+        const l = 30 + p.life * 16;
+        const al = p.life * (p.sk ? .9 : .5);
+        const s = p.sz * (.5 + p.life * .7);
+        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s);
+        g.addColorStop(0, `hsla(${h + 10},100%,${l + 5}%,${al})`);
+        g.addColorStop(.5, `hsla(${h},95%,${l}%,${al * .55})`);
+        g.addColorStop(1, `hsla(${h},90%,${l - 10}%,0)`);
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, s, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    };
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      for (let i = 0; i < 60; i++) { spawn(false); ps.forEach(p => { p.y += p.vy * 8; p.life -= .005; }); }
+      drawFrame();
+      return;
+    }
+    let wasConnected = false;
+    const loop = () => {
+      if (canvas.isConnected) {
+        wasConnected = true;
+      } else if (wasConnected) {
+        return;
+      } else {
+        requestAnimationFrame(loop);
+        return;
+      }
+      t += .016;
+      const br = .75 + Math.sin(t * 2.2) * .25;
+      const n = Math.round(2 * it * br);
+      for (let i = 0; i < n; i++) spawn(false);
+      if (Math.random() < .07 * it) spawn(true);
+      drawFrame();
+      requestAnimationFrame(loop);
+    };
+    hoverTarget.addEventListener('mouseenter', () => it = 2.2);
+    hoverTarget.addEventListener('mouseleave', () => it = 1);
+    loop();
+  }
+};
+
 const Render = {
   showTimePrecision: false,
 
@@ -634,13 +711,6 @@ const Render = {
       }
       row.appendChild(title);
 
-      if (isPriority && settings.priorityHighlight === 'icon') {
-        const star = document.createElement('span');
-        star.className = 'priority-star';
-        star.textContent = '⭐';
-        row.insertBefore(star, title);
-      }
-
       const notesMode = settings.notesDisplay || 'none';
       const hasNotes = !!(node.notes && node.notes.trim());
       if (hasNotes && notesMode !== 'none') {
@@ -735,11 +805,28 @@ const Render = {
         susTag.className = 'time-tag suspended-tag';
         susTag.textContent = '搁置';
         row.appendChild(susTag);
-      } else if (isPriority && settings.priorityHighlight === 'tag') {
-        const priTag = document.createElement('span');
-        priTag.className = 'time-tag priority-tag';
-        priTag.textContent = '优先';
-        row.appendChild(priTag);
+      } else if (isPriority) {
+        if (settings.priorityHighlight === 'tag') {
+          const priTag = document.createElement('span');
+          priTag.className = 'time-tag priority-tag';
+          priTag.textContent = '优先';
+          row.appendChild(priTag);
+        } else if (settings.priorityHighlight === 'icon') {
+          const priIcon = document.createElement('span');
+          priIcon.className = 'priority-star';
+          priIcon.textContent = '🔥';
+          row.appendChild(priIcon);
+        } else if (settings.priorityHighlight === 'animate') {
+          const wrap = document.createElement('span');
+          wrap.className = 'priority-fire-wrap';
+          const cv = document.createElement('canvas');
+          cv.className = 'priority-fire-canvas';
+          cv.width = FireFX.W;
+          cv.height = FireFX.H;
+          wrap.appendChild(cv);
+          row.appendChild(wrap);
+          FireFX.mount(cv, row);
+        }
       }
 
       const tag = Render.formatTimeTag(node, today);
