@@ -665,6 +665,7 @@ const Render = {
         e.stopPropagation();
         const newDone = !node.done;
         const patch = { done: newDone };
+        if (newDone) patch.suspendedAt = null;
         if (newDone && Main.state.settings && Main.state.settings.autoCollapseDone) {
           patch.expanded = false;
         }
@@ -816,7 +817,7 @@ const Render = {
         } else if (settings.priorityHighlight === 'icon') {
           const priIcon = document.createElement('span');
           priIcon.className = 'priority-star';
-          priIcon.textContent = '🔥';
+          priIcon.innerHTML = window.Icon.flame();
           row.appendChild(priIcon);
         } else if (settings.priorityHighlight === 'animate') {
           const wrap = document.createElement('span');

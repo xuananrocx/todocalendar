@@ -981,6 +981,7 @@ const Main = {
       const t = this.state.todos.find(x => x.id === did);
       if (!t) continue;
       const patch = { done };
+      if (done) patch.suspendedAt = null;
       if (did === rootId) Object.assign(patch, parentPatch);
       Object.assign(t, patch);
     }

@@ -1070,6 +1070,7 @@ fn update_todo(app: tauri::AppHandle, id: String, patch: serde_json::Value) -> O
                         if !was_done || updated.completed_at.is_none() {
                             updated.completed_at = Some(now_iso());
                         }
+                        updated.suspended_at = None;
                     } else {
                         updated.completed_at = None;
                         updated.archived_at = None;
@@ -1128,6 +1129,9 @@ fn set_todo_done_recursive(app: tauri::AppHandle, id: String, done: bool) -> Vec
             }
             t.done = done;
             t.completed_at = completed_at.clone();
+            if done {
+                t.suspended_at = None;
+            }
         }
     }
     save_data(&file, &data);

@@ -924,7 +924,7 @@ body.bulk-mode .drag-handle { display: none; }
 .time-tag.priority-tag {
   background: #ea580c;
   color: #fff;
-  font-weight: 600;
+  font-weight: 400;
 }
 [data-theme="dark"] .time-tag.suspended-tag {
   background: rgba(148, 163, 184, .14);
@@ -940,7 +940,11 @@ body.bulk-mode .drag-handle { display: none; }
   font-size: 14px;
   flex-shrink: 0;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
 }
+.priority-star .svg-icon { width: 14px; height: 14px; }
+[data-theme="dark"] .priority-star { color: #fb923c; }
 .priority-fire-wrap {
   display: inline-flex;
   align-items: center;
@@ -955,10 +959,21 @@ body.bulk-mode .drag-handle { display: none; }
 .node:has(.priority-fire-canvas):hover {
   background: linear-gradient(90deg, rgba(255, 237, 213, .45), rgba(254, 202, 202, .35));
 }
-.node.is-priority.priority-bg {
-  background: #fef3c7;
+.node.is-priority.priority-bg .title {
+  flex: 0 1 auto;
+  margin-right: auto;
+  background: linear-gradient(135deg, #f97316 0%, #ec4899 100%);
+  color: #fff;
+  font-weight: 500;
+  border-radius: 4px;
+  padding: 1px 5px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
-[data-theme="dark"] .node.is-priority.priority-bg { background: rgba(234, 179, 8, .14); }
+[data-theme="dark"] .node.is-priority.priority-bg .title {
+  background: linear-gradient(135deg, #ea580c 0%, #db2777 100%);
+  color: #fff;
+}
 
 .fld-flags {
   display: grid; grid-template-columns: 1fr 1fr;
