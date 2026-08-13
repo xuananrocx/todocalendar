@@ -946,7 +946,6 @@ body.bulk-mode .drag-handle { display: none; }
   align-items: center;
   flex-shrink: 0;
   position: relative;
-  z-index: 1;
 }
 .priority-fire-canvas {
   width: 34px;

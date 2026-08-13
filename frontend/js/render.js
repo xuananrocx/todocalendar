@@ -61,12 +61,14 @@ const FireFX = {
         requestAnimationFrame(loop);
         return;
       }
-      t += .016;
-      const br = .75 + Math.sin(t * 2.2) * .25;
-      const n = Math.round(2 * it * br);
-      for (let i = 0; i < n; i++) spawn(false);
-      if (Math.random() < .07 * it) spawn(true);
-      drawFrame();
+      if (!document.querySelector('.modal-mask:not([hidden])')) {
+        t += .016;
+        const br = .75 + Math.sin(t * 2.2) * .25;
+        const n = Math.round(2 * it * br);
+        for (let i = 0; i < n; i++) spawn(false);
+        if (Math.random() < .07 * it) spawn(true);
+        drawFrame();
+      }
       requestAnimationFrame(loop);
     };
     hoverTarget.addEventListener('mouseenter', () => it = 2.2);
