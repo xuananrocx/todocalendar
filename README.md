@@ -1,6 +1,6 @@
 # TodoCalendar
 
-> 极简待办日历 — 本地优先,仅专注于待办
+> 极简待办日历
 >
 > A minimalist local-first desktop calendar + todo app.
 
