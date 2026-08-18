@@ -2366,6 +2366,18 @@ body.bulk-mode .drag-handle { display: none; }
   z-index: 1;
 }
 [data-theme="dark"] .cal-working-day { background: #f97316; }
+.cal-rest-day {
+  position: absolute; top: 6px; right: 4px;
+  font-size: 10px; font-weight: 600; color: #fff;
+  background: #10b981; padding: 0 5px;
+  border-radius: 3px; line-height: 1;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+[data-theme="dark"] .cal-rest-day { background: #059669; }
 
 /* ===== 字体颜色预设(default/warm1/warm2/warm3) =====
    优先级递增:浅色 default < 深色 default < 浅色 warm < 深色 warm */

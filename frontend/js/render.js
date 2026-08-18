@@ -919,6 +919,8 @@ const Render = {
     const overdue = state.todos.filter(t => Render.isOverdue(t)).length;
     const inProgress = total - done - overdue;
     const style = (state.settings && state.settings.statsStyle) || 'text';
+    stats.hidden = style === 'none';
+    if (stats.hidden) return;
     stats.className = `stats stats-${style}`;
     stats.textContent = '';
     if (style === 'chip') {
@@ -1041,6 +1043,18 @@ const Render = {
         wd.textContent = '班';
         wd.title = `${holiday.name} · 调休上班`;
         cell.appendChild(wd);
+      }
+
+      // 休息日角标 (周末+法定假日,调休上班日除外)
+      if (state.settings?.showRestBadge === true && !isWorkingdayOverride) {
+        const dow = c.date.getDay();
+        if (dow === 0 || dow === 6 || isOffHoliday) {
+          const rd = document.createElement('div');
+          rd.className = 'cal-rest-day';
+          rd.textContent = '休';
+          if (isOffHoliday) rd.title = `${holiday.name} · 法定假日`;
+          cell.appendChild(rd);
+        }
       }
 
       const dateEl = document.createElement('div');

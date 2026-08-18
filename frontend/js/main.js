@@ -388,6 +388,7 @@ const Main = {
     const clockEl = document.getElementById('timeClock');
     if (!clockEl) return;
     const showSec = !!this.state?.settings?.clockShowSeconds;
+    const showTime = this.state?.settings?.clockShowTime !== false;
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
     if (showSec) {
       clockEl.classList.add('time-clock-seconds');
@@ -410,8 +411,7 @@ const Main = {
       clockEl.classList.remove('time-clock-seconds');
       clockEl.innerHTML = `
         <span class="time-clock-date"></span>
-        <span class="time-clock-sep"></span>
-        <span class="time-clock-hm"></span>
+        ${showTime ? '<span class="time-clock-sep"></span>\n        <span class="time-clock-hm"></span>' : ''}
       `;
       const dateEl = clockEl.querySelector('.time-clock-date');
       const hmEl = clockEl.querySelector('.time-clock-hm');
@@ -419,7 +419,7 @@ const Main = {
         const d = new Date();
         const pad = (n) => String(n).padStart(2, '0');
         dateEl.textContent = `${d.getMonth() + 1}月${d.getDate()}日 ${weekdays[d.getDay()]}`;
-        hmEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        if (hmEl) hmEl.textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
       };
       update();
       if (this._clockTimer) clearInterval(this._clockTimer);
@@ -1021,7 +1021,7 @@ const Main = {
       if ('autoArchive' in patch || 'archiveAfterDays' in patch) {
         await this.checkArchiveDue();
       }
-      if ('clockShowSeconds' in patch) {
+      if ('clockShowSeconds' in patch || 'clockShowTime' in patch) {
         this.startClock();
       }
     } catch (e) {
@@ -1565,11 +1565,18 @@ const Main = {
             {value:'small',label:'小'},{value:'medium',label:'中'},{value:'medium-large',label:'较大'},{value:'large',label:'大'}
           ], s.fontSize, 'fontSize')}
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">统计样式${this._hint('顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例;不显示则完全隐藏顶部统计')}</div>
+          ${this._seg([
+            {value:'none',label:'不显示'},{value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'bar',label:'进度条'}
+          ], s.statsStyle || 'text', 'statsStyle')}
+        </div>
         <div class="settings-row">${this._toggle(s.compact, 'compact', '紧凑模式', '缩小行距显示更多内容')}</div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">时间与时钟</div>
         <div class="settings-row">${this._toggle(s.showTimePrecision === true, 'showTimePrecision', '显示具体时间', '开启后所有时间显示精确到分钟,关闭则只显示日期')}</div>
+        <div class="settings-row">${this._toggle(s.clockShowTime !== false, 'clockShowTime', '时钟显示时间', '关闭后顶部只显示"xx月xx日 周几",分隔符与具体时分不再显示(时钟显示秒数为独立的纯时间模式,不受此开关影响)')}</div>
         <div class="settings-row">${this._toggle(!!s.clockShowSeconds, 'clockShowSeconds', '时钟显示秒数', '顶部时钟显示 HH:MM:SS,下方秒进度条(隐藏月日周几)')}</div>
         </div>
         <div class="settings-group">
@@ -1621,6 +1628,7 @@ const Main = {
         </div>
         <div class="settings-group">
         <div class="settings-section-title">窗格与颜色</div>
+        <div class="settings-row">${this._toggle(s.showRestBadge === true, 'showRestBadge', '显示"休"字角标', '在周六周日与法定假日的窗格右上角显示绿色"休"角标;调休上班日仍显示"班"角标,不受此开关影响')}</div>
         <div class="settings-row">
           <div class="settings-row-label">周末窗格颜色${this._hint('给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)')}</div>
           <div class="color-picker" data-onchange="weekendColor">
@@ -1719,12 +1727,6 @@ const Main = {
             ${this._colorSwatch('aurora', '极光', '#10b981', '#06b6d4', s.todoItemCustomColor)}
             ${this._colorSwatch('flame', '火焰', '#ef4444', '#f97316', s.todoItemCustomColor)}
           </div>` : ''}
-        </div>
-        <div class="settings-row">
-          <label class="settings-row-label">统计样式${this._hint('顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例')}</label>
-          ${this._seg([
-            {value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'bar',label:'进度条'}
-          ], s.statsStyle || 'text', 'statsStyle')}
         </div>
         <div class="settings-row">
           <div class="settings-row-label">备注展示方式${this._hint('悬浮:鼠标移到标题上显示完整备注;内联摘要:带"备注"标签+前 30 字;内联简化:无标签的前 30 字')}</div>
