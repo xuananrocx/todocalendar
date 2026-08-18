@@ -1458,13 +1458,22 @@ const Main = {
   _paletteSwatch(name, currentValue) {
     const palettes = {
       classic: ['#3b82f6', '#22c55e', '#a855f7', '#f97316', '#ec4899', '#06b6d4'],
-      morandi: ['#6366f1', '#10b981', '#a855f7', '#dc2626', '#d97706', '#0891b2'],
+      morandi: ['#5b6f8f', '#63756a', '#7c7057', '#8f5a5a', '#8a6d54', '#557575'],
       ocean: ['#0284c7', '#0891b2', '#0d9488', '#2563eb', '#4f46e5', '#7c3aed'],
     };
-    const colors = palettes[name] || palettes.classic;
-    const labels = { classic: '经典', morandi: '莫兰迪', ocean: '海洋' };
+    const labels = { classic: '经典', morandi: '莫兰迪', ocean: '海洋', theme: '主题色' };
+    const dots = name === 'theme'
+      ? [
+        'linear-gradient(135deg, var(--primary-from), var(--primary-to))',
+        'color-mix(in srgb, var(--primary) 26%, var(--panel))',
+        'color-mix(in srgb, var(--primary) 18%, var(--panel))',
+        'color-mix(in srgb, var(--primary) 12%, var(--panel))',
+        'color-mix(in srgb, var(--primary) 7%, var(--panel))',
+        'color-mix(in srgb, var(--primary) 4%, var(--panel))',
+      ].map(c => `<span class="palette-dot" style="background:${c}"></span>`).join('')
+      : (palettes[name] || palettes.classic).map(c => `<span class="palette-dot" style="background:${c}"></span>`).join('');
     return `<div class="palette-swatch ${name === currentValue ? 'active' : ''}" data-value="${name}" title="${labels[name] || name}">
-      ${colors.map(c => `<span class="palette-dot" style="background:${c}"></span>`).join('')}
+      ${dots}
       <span class="palette-name">${labels[name] || name}</span>
     </div>`;
   },
@@ -1751,6 +1760,7 @@ const Main = {
             ${this._paletteSwatch('classic', s.numberingPalette)}
             ${this._paletteSwatch('morandi', s.numberingPalette)}
             ${this._paletteSwatch('ocean', s.numberingPalette)}
+            ${this._paletteSwatch('theme', s.numberingPalette)}
           </div>
         </div>
         </div>
