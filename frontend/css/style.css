@@ -2118,7 +2118,8 @@ body.bulk-mode .drag-handle { display: none; }
   padding: 14px 18px; border-bottom: 1px solid var(--border);
 }
 .settings-title { font-size: 15px; font-weight: 600; }
-.settings-body { display: flex; min-height: 340px; max-height: calc(80vh - 120px); }
+/* 固定高度,避免数据/关于等内容少的 tab 让弹窗高度来回缩放 */
+.settings-body { display: flex; height: 500px; min-height: 340px; max-height: calc(80vh - 120px); }
 .settings-nav {
   width: 160px; background: var(--panel);
   padding: 8px; border-right: 1px solid var(--border);
