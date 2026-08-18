@@ -95,7 +95,7 @@ pub struct Settings {
     pub show_single_add: bool,
     pub show_numbering: bool,
     pub numbering_style: String,   // wbs | simple
-    pub numbering_palette: String, // classic | morandi | ocean
+    pub numbering_palette: String, // classic | morandi | ocean | theme
     pub click_action: String,      // edit | expand
     pub notes_display: String,     // none | hover | inline
     pub theme_color: String,       // clay | blue | cyan | red | ink | sunset | deep | aurora | flame
@@ -114,9 +114,11 @@ pub struct Settings {
     pub calendar_child_display: String, // current | main-only | main-child | child-main
     pub close_on_outside_click: bool,
     pub weekend_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
-    pub stats_style: String, // text | chip | bar
+    pub stats_style: String, // none | text | chip | bar
+    pub clock_show_time: bool, // 时钟显示具体时间(关闭只显示"xx月xx日 周几")
     pub clock_show_seconds: bool, // 顶部时钟显示秒数(隐藏日期,显示进度条)
     pub holiday_color: String, // none | yellow | pink | blue | green | beige | peach | dawn | aurora
+    pub show_rest_badge: bool, // 周末/法定假日显示"休"角标
     pub holiday_auto_update: bool,
     pub holiday_last_update: Option<String>,
     pub priority_highlight: String, // none | icon | bar | bg | full
@@ -129,7 +131,7 @@ impl Default for Settings {
             theme: "light".into(),
             font_size: "medium".into(),
             compact: false,
-            show_icons: true,
+            show_icons: false,
             week_start: "monday".into(),
             show_week_number: false,
             show_ongoing_in_calendar: false,
@@ -137,7 +139,7 @@ impl Default for Settings {
             show_start_in_calendar: true,
             show_calendar_done: false,
             show_lunar: true,
-            default_start_time: "now".into(),
+            default_start_time: "09:00".into(),
             sort_mode: "auto".into(),
             drag_mode: "sibling".into(),
             auto_collapse_done: true,
@@ -165,16 +167,18 @@ impl Default for Settings {
             start_event_color_mode: "theme".into(),
             start_event_custom_color: "slate".into(),
             auto_sync_start: false,
-            auto_sync_end: false,
+            auto_sync_end: true,
             calendar_child_display: "main-only".into(),
             close_on_outside_click: true,
             weekend_color: "none".into(),
-            stats_style: "text".into(),
+            stats_style: "none".into(),
+            clock_show_time: true,
             clock_show_seconds: false,
-            holiday_color: "flag".into(),
+            holiday_color: "none".into(),
+            show_rest_badge: false,
             holiday_auto_update: true,
             holiday_last_update: None,
-            priority_highlight: "tag".into(),
+            priority_highlight: "bg".into(),
             priority_auto_top: true,
         }
     }
