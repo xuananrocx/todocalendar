@@ -8,7 +8,7 @@ const Main = {
     hideDone: false,
     highlightId: null,
     settings: null,
-    settingsTab: 'appearance',
+    settingsTab: 'general',
     bulkExpandPending: false,
     archivedTodos: [],
     historyAllTodos: [],
@@ -1498,9 +1498,13 @@ const Main = {
 
   _toggle(checked, onChange, title, desc) {
     return `<div class="switch-row">
-      <div class="meta"><div class="title">${title}</div>${desc ? `<div class="desc">${desc}</div>` : ''}</div>
+      <div class="meta"><div class="title">${title}${desc ? this._hint(desc) : ''}</div></div>
       <div class="toggle ${checked ? 'on' : ''}" data-onchange="${onChange}"></div>
     </div>`;
+  },
+
+  _hint(text) {
+    return `<span class="hint-icon">?<span class="hint-tip">${text}</span></span>`;
   },
 
   _attachMaskClose(maskId, closeCallback) {
@@ -1520,10 +1524,12 @@ const Main = {
   },
 
   _settingsTabHtml(tab, s) {
-    if (tab === 'appearance') {
+    if (tab === 'general') {
       return `
-        <div class="settings-content-title">外观</div>
-        <div class="settings-content-desc">调整界面显示风格</div>
+        <div class="settings-content-title">通用</div>
+        <div class="settings-content-desc">全局界面与交互偏好</div>
+        <div class="settings-group">
+        <div class="settings-section-title">主题与界面</div>
         <div class="settings-row">
           <div class="settings-row-label">主题</div>
           ${this._seg([
@@ -1545,21 +1551,117 @@ const Main = {
           </div>
         </div>
         <div class="settings-row">
-          <div class="settings-row-label">列表父待办背景</div>
+          <div class="settings-row-label">字体颜色</div>
+          <div class="color-picker" data-onchange="fontColor">
+            ${this._fontColorSwatch('default', '默认', '#1f2937', '#f1e9d8', s.fontColor)}
+            ${this._fontColorSwatch('warm1', '暖墨/米黄', '#2a2520', '#ede0c8', s.fontColor)}
+            ${this._fontColorSwatch('warm2', '暖褐/浅杏', '#3d2f1f', '#e8d4b8', s.fontColor)}
+            ${this._fontColorSwatch('warm3', '暖棕/暖灰', '#4a3520', '#d4c5b0', s.fontColor)}
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">字体大小</div>
           ${this._seg([
-            {value:'theme',label:'跟随主题'},{value:'none',label:'无背景'},{value:'custom',label:'自定义'}
-          ], s.todoItemColorMode || 'none', 'todoItemColorMode')}
-          ${s.todoItemColorMode === 'custom' ? `
-          <div class="color-picker" data-onchange="todoItemCustomColor" style="margin-top: 6px;">
-            ${this._colorSwatch('clay', '陶土', '#D97757', null, s.todoItemCustomColor)}
-            ${this._colorSwatch('blue', '蓝', '#3b82f6', null, s.todoItemCustomColor)}
-            ${this._colorSwatch('cyan', '青', '#06b6d4', null, s.todoItemCustomColor)}
-            ${this._colorSwatch('red', '红', '#ef4444', null, s.todoItemCustomColor)}
-            ${this._colorSwatch('ink', '墨', '#1f2937', null, s.todoItemCustomColor)}
-            ${this._colorSwatch('sunset', '日落', '#f97316', '#ec4899', s.todoItemCustomColor)}
-            ${this._colorSwatch('deep', '深海', '#3b82f6', '#06b6d4', s.todoItemCustomColor)}
-            ${this._colorSwatch('aurora', '极光', '#10b981', '#06b6d4', s.todoItemCustomColor)}
-            ${this._colorSwatch('flame', '火焰', '#ef4444', '#f97316', s.todoItemCustomColor)}
+            {value:'small',label:'小'},{value:'medium',label:'中'},{value:'medium-large',label:'较大'},{value:'large',label:'大'}
+          ], s.fontSize, 'fontSize')}
+        </div>
+        <div class="settings-row">${this._toggle(s.compact, 'compact', '紧凑模式', '缩小行距显示更多内容')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">时间与时钟</div>
+        <div class="settings-row">${this._toggle(s.showTimePrecision === true, 'showTimePrecision', '显示具体时间', '开启后所有时间显示精确到分钟,关闭则只显示日期')}</div>
+        <div class="settings-row">${this._toggle(!!s.clockShowSeconds, 'clockShowSeconds', '时钟显示秒数', '顶部时钟显示 HH:MM:SS,下方秒进度条(隐藏月日周几)')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">通用交互</div>
+        <div class="settings-row">${this._toggle(s.deleteConfirm !== false, 'deleteConfirm', '删除前确认', '默认已开启,关闭后直接删除')}</div>
+        <div class="settings-row">${this._toggle(s.closeOnOutsideClick !== false, 'closeOnOutsideClick', '点击外部关闭弹窗', '点击遮罩空白处关闭弹窗;仅在按下和松开都在外部时触发(防止从内部拖到外部误触)')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">应用图标</div>
+        <div class="settings-row">
+          <div class="icon-picker" data-onchange="appIcon">
+            ${this._iconSwatch('bf', s.appIcon, '日历带勾')}
+            ${this._iconSwatch('b', s.appIcon, '纯对勾')}
+          </div>
+        </div>
+        </div>
+      `;
+    }
+    if (tab === 'calendar') {
+      return `
+        <div class="settings-content-title">日历</div>
+        <div class="settings-content-desc">日历视图相关选项</div>
+        <div class="settings-group">
+        <div class="settings-section-title">基础视图</div>
+        <div class="settings-row">
+          <div class="settings-row-label">每周第一天</div>
+          ${this._seg([
+            {value:'monday',label:'周一'},{value:'sunday',label:'周日'}
+          ], s.weekStart || 'monday', 'weekStart')}
+        </div>
+        <div class="settings-row">${this._toggle(!!s.showWeekNumber, 'showWeekNumber', '显示周数', '左侧显示当年第几周')}</div>
+        <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">事件显示</div>
+        <div class="settings-row">${this._toggle(s.showStartInCalendar !== false, 'showStartInCalendar', '显示开始任务', '在月历中显示任务的开始日期(同一天的开始/结束时间相同时也会显示)')}</div>
+        <div class="settings-row">${this._toggle(s.showOngoingInCalendar !== false, 'showOngoingInCalendar', '显示进行中任务', '仅在跨天任务的中间日期显示(开始与截止同一天的任务不显示进行中)')}</div>
+        <div class="settings-row">${this._toggle(s.showEndInCalendar !== false, 'showEndInCalendar', '显示截止任务', '在月历中显示任务的截止日期(同一天的开始/结束时间相同时也会显示)')}</div>
+        <div class="settings-row">${this._toggle(s.showCalendarDone === true, 'showCalendarDone', '显示已完成任务', '在月历中显示已完成的待办(日详情页不受影响)')}</div>
+        <div class="settings-row">
+          <div class="settings-row-label">子节点展示方式${this._hint('子代办在日历中的展示方式:显示主名将子代办合并到主代办名下(不展示子代办自己的事件条);不展示子完全隐藏子代办事件;名拼接主-子/子-主格式显示每个子代办自己的事件条并附带主代办名')}</div>
+          ${this._seg([
+            {value:'current',label:'显示主名'},
+            {value:'main-only',label:'不展示子'},
+            {value:'main-child',label:'名拼接主-子'},
+            {value:'child-main',label:'名拼接子-主'}
+          ], s.calendarChildDisplay || 'main-only', 'calendarChildDisplay')}
+        </div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">窗格与颜色</div>
+        <div class="settings-row">
+          <div class="settings-row-label">周末窗格颜色${this._hint('给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)')}</div>
+          <div class="color-picker" data-onchange="weekendColor">
+            ${this._colorSwatch('none', '无', '#ffffff', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('blue', '鱼肚白', '#fafaf9', '#e2e8f0', s.weekendColor || 'none')}
+            ${this._colorSwatch('yellow', '茶白', '#fafaf9', '#e7e5e4', s.weekendColor || 'none')}
+            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.weekendColor || 'none')}
+            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.weekendColor || 'none')}
+            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.weekendColor || 'none')}
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">法定假日窗格颜色${this._hint('给法定假日窗格添加颜色标识(优先级高于周末色;调休上班日不应用周末色)')}</div>
+          <div class="color-picker" data-onchange="holidayColor">
+            ${this._colorSwatch('none', '无', '#ffffff', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('flag', '国旗', '#de2910', null, s.holidayColor || 'none', '<svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice"><polygon fill="#ffde00" points="5,2 5.67,4.07 7.85,4.07 6.09,5.35 6.76,7.43 5,6.15 3.24,7.43 3.91,5.35 2.15,4.07 4.33,4.07"/><polygon fill="#ffde00" transform="rotate(-120.96 10 2)" points="10,1 10.23,1.69 10.95,1.69 10.36,2.12 10.59,2.81 10,2.38 9.41,2.81 9.64,2.12 9.05,1.69 9.78,1.69"/><polygon fill="#ffde00" transform="rotate(-98.13 12 4)" points="12,3 12.23,3.69 12.95,3.69 12.36,4.12 12.59,4.81 12,4.38 11.41,4.81 11.64,4.12 11.05,3.69 11.78,3.69"/><polygon fill="#ffde00" transform="rotate(-74.05 12 7)" points="12,6 12.23,6.69 12.95,6.69 12.36,7.12 12.59,7.81 12,7.38 11.41,7.81 11.64,7.12 11.05,6.69 11.78,6.69"/><polygon fill="#ffde00" transform="rotate(-51.34 10 9)" points="10,8 10.23,8.69 10.95,8.69 10.36,9.12 10.59,9.81 10,9.38 9.41,9.81 9.64,9.12 9.05,8.69 9.78,8.69"/></svg>')}
+            ${this._colorSwatch('china', '中国红', '#de2910', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('brocade', '锦绣', '#fca5a5', '#fbbf24', s.holidayColor || 'none')}
+            ${this._colorSwatch('firework', '烟花', '#fef3c7', '#fb7185', s.holidayColor || 'none')}
+            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.holidayColor || 'none')}
+            ${this._colorSwatch('glow', '霞光', '#fed7aa', '#fb7185', s.holidayColor || 'none')}
+            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.holidayColor || 'none')}
+            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.holidayColor || 'none')}
+          </div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">当天开始事件条颜色${this._hint('自定义模式下,当天开始事件条使用白底+左色条+灰字(与进行中/截止风格一致)')}</div>
+          ${this._seg([
+            {value:'theme',label:'跟随主题'},{value:'custom',label:'自定义'}
+          ], s.startEventColorMode || 'theme', 'startEventColorMode')}
+          ${s.startEventColorMode === 'custom' ? `
+          <div class="color-picker" data-onchange="startEventCustomColor" style="margin-top: 6px;">
+            ${this._colorSwatch('amber', '琥珀', '#f59e0b', null, s.startEventCustomColor)}
+            ${this._colorSwatch('blue', '蓝', '#3b82f6', null, s.startEventCustomColor)}
+            ${this._colorSwatch('indigo', '靛', '#6366f1', null, s.startEventCustomColor)}
+            ${this._colorSwatch('violet', '紫', '#8b5cf6', null, s.startEventCustomColor)}
+            ${this._colorSwatch('cyan', '青', '#06b6d4', null, s.startEventCustomColor)}
+            ${this._colorSwatch('slate', '灰', '#64748b', null, s.startEventCustomColor)}
           </div>` : ''}
         </div>
         <div class="settings-row">
@@ -1580,48 +1682,60 @@ const Main = {
             ${this._colorSwatch('flame', '火焰', '#ef4444', '#f97316', s.dayItemCustomColor)}
           </div>` : ''}
         </div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">节假日数据</div>
         <div class="settings-row">
-          <div class="settings-row-label">字体颜色</div>
-          <div class="color-picker" data-onchange="fontColor">
-            ${this._fontColorSwatch('default', '默认', '#1f2937', '#f1e9d8', s.fontColor)}
-            ${this._fontColorSwatch('warm1', '暖墨/米黄', '#2a2520', '#ede0c8', s.fontColor)}
-            ${this._fontColorSwatch('warm2', '暖褐/浅杏', '#3d2f1f', '#e8d4b8', s.fontColor)}
-            ${this._fontColorSwatch('warm3', '暖棕/暖灰', '#4a3520', '#d4c5b0', s.fontColor)}
+          <div class="settings-row-label">节假日数据更新</div>
+          <div>${this._toggle(s.holidayAutoUpdate !== false, 'holidayAutoUpdate', '自动检查更新', '启动时若距上次超过30天,后台拉取最新数据')}</div>
+          <div style="margin-top:6px">
+            <button class="btn ghost" id="btnCheckHolidayUpdates" style="padding:4px 10px;font-size:12px"><i data-icon="refresh"></i> 立即检查更新</button>
           </div>
+          <div class="settings-row-desc" id="holidayLastUpdateDesc" style="margin-top:4px">${s.holidayLastUpdate ? `上次更新:${new Date(s.holidayLastUpdate).toLocaleString('zh-CN')}` : '尚未更新(使用内置数据)'}</div>
         </div>
+        </div>
+      `;
+    }
+    if (tab === 'list') {
+      return `
+        <div class="settings-content-title">列表</div>
+        <div class="settings-content-desc">待办列表显示与操作</div>
+        <div class="settings-group">
+        <div class="settings-section-title">列表样式</div>
         <div class="settings-row">
-          <div class="settings-row-label">字体大小</div>
+          <div class="settings-row-label">列表父待办背景</div>
           ${this._seg([
-            {value:'small',label:'小'},{value:'medium',label:'中'},{value:'medium-large',label:'较大'},{value:'large',label:'大'}
-          ], s.fontSize, 'fontSize')}
+            {value:'theme',label:'跟随主题'},{value:'none',label:'无背景'},{value:'custom',label:'自定义'}
+          ], s.todoItemColorMode || 'none', 'todoItemColorMode')}
+          ${s.todoItemColorMode === 'custom' ? `
+          <div class="color-picker" data-onchange="todoItemCustomColor" style="margin-top: 6px;">
+            ${this._colorSwatch('clay', '陶土', '#D97757', null, s.todoItemCustomColor)}
+            ${this._colorSwatch('blue', '蓝', '#3b82f6', null, s.todoItemCustomColor)}
+            ${this._colorSwatch('cyan', '青', '#06b6d4', null, s.todoItemCustomColor)}
+            ${this._colorSwatch('red', '红', '#ef4444', null, s.todoItemCustomColor)}
+            ${this._colorSwatch('ink', '墨', '#1f2937', null, s.todoItemCustomColor)}
+            ${this._colorSwatch('sunset', '日落', '#f97316', '#ec4899', s.todoItemCustomColor)}
+            ${this._colorSwatch('deep', '深海', '#3b82f6', '#06b6d4', s.todoItemCustomColor)}
+            ${this._colorSwatch('aurora', '极光', '#10b981', '#06b6d4', s.todoItemCustomColor)}
+            ${this._colorSwatch('flame', '火焰', '#ef4444', '#f97316', s.todoItemCustomColor)}
+          </div>` : ''}
         </div>
-        <div class="settings-row">${this._toggle(s.compact, 'compact', '紧凑模式', '缩小行距显示更多内容')}</div>
-        <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示图标')}</div>
-        <div class="settings-row">${this._toggle(!!s.showNumbering, 'showNumbering', '显示任务编号', '按当前顺序编号,父待办显示子任务数')}</div>
-        <div class="settings-row">${this._toggle(s.showTimePrecision === true, 'showTimePrecision', '显示具体时间', '开启后所有时间显示精确到分钟,关闭则只显示日期')}</div>
-        <div class="settings-row">${this._toggle(!!s.clockShowSeconds, 'clockShowSeconds', '时钟显示秒数', '顶部时钟显示 HH:MM:SS,下方秒进度条(隐藏月日周几)')}</div>
         <div class="settings-row">
-          <label class="settings-row-label">统计样式</label>
+          <label class="settings-row-label">统计样式${this._hint('顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例')}</label>
           ${this._seg([
             {value:'text',label:'文字横排'},{value:'chip',label:'彩色块'},{value:'bar',label:'进度条'}
           ], s.statsStyle || 'text', 'statsStyle')}
-          <div class="settings-row-desc">顶部统计的显示样式:文字横排紧凑朴素;彩色块每个状态独立色块;进度条细条+下方百分比与图例</div>
         </div>
         <div class="settings-row">
-          <div class="settings-row-label">备注展示方式</div>
+          <div class="settings-row-label">备注展示方式${this._hint('悬浮:鼠标移到标题上显示完整备注;内联摘要:带"备注"标签+前 30 字;内联简化:无标签的前 30 字')}</div>
           ${this._seg([
             {value:'none',label:'不展示'},{value:'hover',label:'悬浮预览'},{value:'inline',label:'内联摘要'},{value:'inline-plain',label:'内联简化'}
           ], s.notesDisplay || 'none', 'notesDisplay')}
-          <div class="settings-row-desc">悬浮:鼠标移到标题上显示完整备注;内联摘要:带"备注"标签+前 30 字;内联简化:无标签的前 30 字</div>
         </div>
-        <div class="settings-row">
-          <div class="settings-row-label">优先待办高亮</div>
-          ${this._seg([
-            {value:'none',label:'不高亮'},{value:'icon',label:'图标'},{value:'animate',label:'动态'},{value:'tag',label:'标签'},{value:'bg',label:'背景'}
-          ], s.priorityHighlight || 'tag', 'priorityHighlight')}
-          <div class="settings-row-desc">优先待办的视觉强调方式:图标=🔥静态;动态=🔥日落渐变光晕动画(2s);标签=橙底"优先"标签;背景=浅黄底</div>
         </div>
-        <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
+        <div class="settings-group">
+        <div class="settings-section-title">编号</div>
+        <div class="settings-row">${this._toggle(!!s.showNumbering, 'showNumbering', '显示任务编号', '按当前顺序编号,父待办显示子任务数')}</div>
         <div class="settings-row numbering-style-row ${s.showNumbering ? '' : 'disabled'}">
           <label class="settings-row-label">编号样式</label>
           ${this._seg([
@@ -1637,146 +1751,70 @@ const Main = {
             ${this._paletteSwatch('ocean', s.numberingPalette)}
           </div>
         </div>
-        <div class="settings-row">
-          <label class="settings-row-label">应用图标</label>
-          <div class="icon-picker" data-onchange="appIcon">
-            ${this._iconSwatch('bf', s.appIcon, '日历带勾')}
-            ${this._iconSwatch('b', s.appIcon, '纯对勾')}
-          </div>
         </div>
-      `;
-    }
-    if (tab === 'calendar') {
-      return `
-        <div class="settings-content-title">日历</div>
-        <div class="settings-content-desc">日历视图相关选项</div>
+        <div class="settings-group">
+        <div class="settings-section-title">优先待办</div>
         <div class="settings-row">
-          <div class="settings-row-label">每周第一天</div>
+          <div class="settings-row-label">优先待办高亮${this._hint('优先待办的视觉强调方式:图标=橙色线性火焰;动态=Canvas 粒子火焰动画(悬停火势变大);标签=实心橙"优先"标签;背景=标题日落渐变底+白字')}</div>
           ${this._seg([
-            {value:'monday',label:'周一'},{value:'sunday',label:'周日'}
-          ], s.weekStart || 'monday', 'weekStart')}
+            {value:'none',label:'不高亮'},{value:'icon',label:'图标'},{value:'animate',label:'动态'},{value:'tag',label:'标签'},{value:'bg',label:'背景'}
+          ], s.priorityHighlight || 'tag', 'priorityHighlight')}
         </div>
-        <div class="settings-row">${this._toggle(!!s.showWeekNumber, 'showWeekNumber', '显示周数', '左侧显示当年第几周')}</div>
-        <div class="settings-row">${this._toggle(s.showStartInCalendar !== false, 'showStartInCalendar', '显示开始任务', '在月历中显示任务的开始日期(同一天的开始/结束时间相同时也会显示)')}</div>
-        <div class="settings-row">${this._toggle(s.showOngoingInCalendar !== false, 'showOngoingInCalendar', '显示进行中任务', '仅在跨天任务的中间日期显示(开始与截止同一天的任务不显示进行中)')}</div>
-        <div class="settings-row">${this._toggle(s.showEndInCalendar !== false, 'showEndInCalendar', '显示截止任务', '在月历中显示任务的截止日期(同一天的开始/结束时间相同时也会显示)')}</div>
-        <div class="settings-row">${this._toggle(s.showCalendarDone === true, 'showCalendarDone', '显示已完成任务', '在月历中显示已完成的待办(日详情页不受影响)')}</div>
-        <div class="settings-row">
-          <div class="settings-row-label">子节点展示方式</div>
-          ${this._seg([
-            {value:'current',label:'显示主名'},
-            {value:'main-only',label:'不展示子'},
-            {value:'main-child',label:'名拼接主-子'},
-            {value:'child-main',label:'名拼接子-主'}
-          ], s.calendarChildDisplay || 'main-only', 'calendarChildDisplay')}
-          <div class="settings-row-desc">子代办在日历中的展示方式:显示主名将子代办合并到主代办名下(不展示子代办自己的事件条);不展示子完全隐藏子代办事件;名拼接主-子/子-主格式显示每个子代办自己的事件条并附带主代办名</div>
+        <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
         </div>
+        <div class="settings-group">
+        <div class="settings-section-title">添加</div>
         <div class="settings-row">
-          <div class="settings-row-label">周末窗格颜色</div>
-          <div class="color-picker" data-onchange="weekendColor">
-            ${this._colorSwatch('none', '无', '#ffffff', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('green', '浅绿', '#d1fae5', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('pink', '浅粉', '#fce7f3', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('blue', '鱼肚白', '#fafaf9', '#e2e8f0', s.weekendColor || 'none')}
-            ${this._colorSwatch('yellow', '茶白', '#fafaf9', '#e7e5e4', s.weekendColor || 'none')}
-            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('peach', '浅橙', '#ffedd5', null, s.weekendColor || 'none')}
-            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.weekendColor || 'none')}
-            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.weekendColor || 'none')}
-          </div>
-          <div class="settings-row-desc">给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)</div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">法定假日窗格颜色</div>
-          <div class="color-picker" data-onchange="holidayColor">
-            ${this._colorSwatch('none', '无', '#ffffff', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('flag', '国旗', '#de2910', null, s.holidayColor || 'none', '<svg style="position:absolute;inset:0;width:100%;height:100%" viewBox="0 0 30 20" preserveAspectRatio="xMidYMid slice"><polygon fill="#ffde00" points="5,2 5.67,4.07 7.85,4.07 6.09,5.35 6.76,7.43 5,6.15 3.24,7.43 3.91,5.35 2.15,4.07 4.33,4.07"/><polygon fill="#ffde00" transform="rotate(-120.96 10 2)" points="10,1 10.23,1.69 10.95,1.69 10.36,2.12 10.59,2.81 10,2.38 9.41,2.81 9.64,2.12 9.05,1.69 9.78,1.69"/><polygon fill="#ffde00" transform="rotate(-98.13 12 4)" points="12,3 12.23,3.69 12.95,3.69 12.36,4.12 12.59,4.81 12,4.38 11.41,4.81 11.64,4.12 11.05,3.69 11.78,3.69"/><polygon fill="#ffde00" transform="rotate(-74.05 12 7)" points="12,6 12.23,6.69 12.95,6.69 12.36,7.12 12.59,7.81 12,7.38 11.41,7.81 11.64,7.12 11.05,6.69 11.78,6.69"/><polygon fill="#ffde00" transform="rotate(-51.34 10 9)" points="10,8 10.23,8.69 10.95,8.69 10.36,9.12 10.59,9.81 10,9.38 9.41,9.81 9.64,9.12 9.05,8.69 9.78,8.69"/></svg>')}
-            ${this._colorSwatch('china', '中国红', '#de2910', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('brocade', '锦绣', '#fca5a5', '#fbbf24', s.holidayColor || 'none')}
-            ${this._colorSwatch('firework', '烟花', '#fef3c7', '#fb7185', s.holidayColor || 'none')}
-            ${this._colorSwatch('beige', '米白', '#fafaf9', null, s.holidayColor || 'none')}
-            ${this._colorSwatch('glow', '霞光', '#fed7aa', '#fb7185', s.holidayColor || 'none')}
-            ${this._colorSwatch('dawn', '黎明', '#fef3c7', '#fce7f3', s.holidayColor || 'none')}
-            ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.holidayColor || 'none')}
-          </div>
-          <div class="settings-row-desc">给法定假日窗格添加颜色标识(优先级高于周末色;调休上班日不应用周末色)</div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">节假日数据更新</div>
-          <div>${this._toggle(s.holidayAutoUpdate !== false, 'holidayAutoUpdate', '自动检查更新', '启动时若距上次超过30天,后台拉取最新数据')}</div>
-          <div style="margin-top:6px">
-            <button class="btn ghost" id="btnCheckHolidayUpdates" style="padding:4px 10px;font-size:12px"><i data-icon="refresh"></i> 立即检查更新</button>
-          </div>
-          <div class="settings-row-desc" id="holidayLastUpdateDesc" style="margin-top:4px">${s.holidayLastUpdate ? `上次更新:${new Date(s.holidayLastUpdate).toLocaleString('zh-CN')}` : '尚未更新(使用内置数据)'}</div>
-        </div>
-        <div class="settings-row">${this._toggle(!!s.showLunar, 'showLunar', '显示农历', '日期格内显示农历日(简化版)')}</div>
-        <div class="settings-row">
-          <div class="settings-row-label">当天开始事件条颜色</div>
-          ${this._seg([
-            {value:'theme',label:'跟随主题'},{value:'custom',label:'自定义'}
-          ], s.startEventColorMode || 'theme', 'startEventColorMode')}
-          ${s.startEventColorMode === 'custom' ? `
-          <div class="color-picker" data-onchange="startEventCustomColor" style="margin-top: 6px;">
-            ${this._colorSwatch('amber', '琥珀', '#f59e0b', null, s.startEventCustomColor)}
-            ${this._colorSwatch('blue', '蓝', '#3b82f6', null, s.startEventCustomColor)}
-            ${this._colorSwatch('indigo', '靛', '#6366f1', null, s.startEventCustomColor)}
-            ${this._colorSwatch('violet', '紫', '#8b5cf6', null, s.startEventCustomColor)}
-            ${this._colorSwatch('cyan', '青', '#06b6d4', null, s.startEventCustomColor)}
-            ${this._colorSwatch('slate', '灰', '#64748b', null, s.startEventCustomColor)}
-          </div>` : ''}
-          <div class="settings-row-desc">自定义模式下,当天开始事件条使用白底+左色条+灰字(与进行中/截止风格一致)</div>
-        </div>
-      `;
-    }
-    if (tab === 'behavior') {
-      return `
-        <div class="settings-content-title">行为</div>
-        <div class="settings-content-desc">日常操作行为偏好</div>
-        <div class="settings-row">
-          <div class="settings-row-label">新建待办默认时间</div>
+          <div class="settings-row-label">新建待办默认时间${this._hint('新建时的默认开始时间(可在编辑时改)')}</div>
           ${this._seg([
             {value:'none',label:'无'},{value:'09:00',label:'当天 09:00'},{value:'now',label:'当前时刻'}
           ], s.defaultStartTime || 'none', 'defaultStartTime')}
-          <div class="settings-row-desc">新建时的默认开始时间(可在编辑时改)</div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">排序方式</div>
-          ${this._seg([
-            {value:'auto',label:'自动排序'},{value:'manual',label:'手动排序'}
-          ], s.sortMode || 'auto', 'sortMode')}
-          <div class="settings-row-desc">自动排序按结束日期由近到远排列；手动排序可拖动调整顺序。自动模式下仅允许同截止日期内拖动微调</div>
-        </div>
-        <div class="settings-row">
-          <div class="settings-row-label">拖动模式</div>
-          ${this._seg([
-            {value:'sibling',label:'仅同级'},{value:'tree',label:'跨层移动'}
-          ], s.dragMode || 'sibling', 'dragMode')}
-          <div class="settings-row-desc">跨层模式下拖到条目中部可将其设为子待办。自动模式下跨层也要求同截止日期</div>
-        </div>
-        <div class="settings-row">${this._toggle(!!s.autoCollapseDone, 'autoCollapseDone', '勾选后折叠', '勾选完成时自动折叠该待办')}</div>
-        <div class="settings-row">
-          <div class="settings-row-label">待办点击行为</div>
-          ${this._seg([
-            {value:'edit',label:'编辑'},{value:'expand',label:'展开/折叠'}
-          ], s.clickAction || 'edit', 'clickAction')}
-          <div class="settings-row-desc">展开模式下父代办点击切换展开,叶子代办点击进入编辑,hover 显示铅笔图标</div>
         </div>
         <div class="settings-row">${this._toggle(!!s.showBulkAdd, 'showBulkAdd', '批量添加子代办', '在父待办行显示批量入口,共享开始与结束时间')}</div>
         <div class="settings-row">${this._toggle(s.showSingleAdd !== false, 'showSingleAdd', '单个添加子代办', '在父待办行显示 + 按钮,关闭后仅保留批量入口')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">排序与分组</div>
+        <div class="settings-row">
+          <div class="settings-row-label">排序方式${this._hint('自动排序按结束日期由近到远排列；手动排序可拖动调整顺序。自动模式下仅允许同截止日期内拖动微调')}</div>
+          ${this._seg([
+            {value:'auto',label:'自动排序'},{value:'manual',label:'手动排序'}
+          ], s.sortMode || 'auto', 'sortMode')}
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">拖动模式${this._hint('跨层模式下拖到条目中部可将其设为子待办。自动模式下跨层也要求同截止日期')}</div>
+          ${this._seg([
+            {value:'sibling',label:'仅同级'},{value:'tree',label:'跨层移动'}
+          ], s.dragMode || 'sibling', 'dragMode')}
+        </div>
         <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
-        <div class="settings-row">${this._toggle(s.deleteConfirm !== false, 'deleteConfirm', '删除前确认', '默认已开启,关闭后直接删除')}</div>
-        <div class="settings-row">${this._toggle(s.closeOnOutsideClick !== false, 'closeOnOutsideClick', '点击外部关闭弹窗', '点击遮罩空白处关闭弹窗;仅在按下和松开都在外部时触发(防止从内部拖到外部误触)')}</div>
-        <div class="settings-row">${this._toggle(!!s.autoSyncStart, 'autoSyncStart', '父代办开始随子代办更新', '新建/修改子代办时间时,父代办的开始时间自动取所有子代办中最早的')}</div>
-        <div class="settings-row">${this._toggle(!!s.autoSyncEnd, 'autoSyncEnd', '父代办结束随子代办更新', '新建/修改子代办时间时,父代办的结束时间自动取所有子代办中最晚的')}</div>
-        <div class="settings-row" style="padding:6px 10px;background:var(--hover-bg);border-radius:6px;font-size:11px;color:var(--muted);line-height:1.5">开启后,父代办时间会被强制覆盖;想保留独立时间请关闭开关。被同步过的父代办在编辑器里显示 ↺ 自动同步 标记。</div>
+        <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示分组对应的分类图标(按分组即分类的规划,图标列功能尚未实现)')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">父子联动</div>
+        <div class="settings-row">${this._toggle(!!s.autoSyncStart, 'autoSyncStart', '父代办开始随子代办更新', '新建/修改子代办时间时,父代办的开始时间自动取所有子代办中最早的。开启后父代办时间会被强制覆盖,想保留独立时间请关闭开关;被同步过的父代办在编辑器里显示 ↺ 自动同步 标记')}</div>
+        <div class="settings-row">${this._toggle(!!s.autoSyncEnd, 'autoSyncEnd', '父代办结束随子代办更新', '新建/修改子代办时间时,父代办的结束时间自动取所有子代办中最晚的。开启后父代办时间会被强制覆盖,想保留独立时间请关闭开关;被同步过的父代办在编辑器里显示 ↺ 自动同步 标记')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">完成与归档</div>
+        <div class="settings-row">${this._toggle(!!s.autoCollapseDone, 'autoCollapseDone', '勾选后折叠', '勾选完成时自动折叠该待办')}</div>
         <div class="settings-row">${this._toggle(s.autoArchive !== false, 'autoArchive', '自动归档', '完成指定天数后从活动视图移入归档记录')}</div>
         <div class="settings-row archive-days-row ${s.autoArchive === false ? 'disabled' : ''}">
-          <label class="settings-row-label" for="archiveAfterDays">完成后归档</label>
+          <label class="settings-row-label" for="archiveAfterDays">完成后归档${this._hint('已完成分支的全部待办到期后统一归档')}</label>
           <div class="number-setting">
             <input id="archiveAfterDays" type="number" min="1" step="1" value="${Math.max(1, Number(s.archiveAfterDays) || 7)}" ${s.autoArchive === false ? 'disabled' : ''}>
             <span>天</span>
           </div>
-          <div class="settings-row-desc">已完成分支的全部待办到期后统一归档</div>
+        </div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">点击</div>
+        <div class="settings-row">
+          <div class="settings-row-label">待办点击行为${this._hint('展开模式下父代办点击切换展开,叶子代办点击进入编辑,hover 显示铅笔图标')}</div>
+          ${this._seg([
+            {value:'edit',label:'编辑'},{value:'expand',label:'展开/折叠'}
+          ], s.clickAction || 'edit', 'clickAction')}
+        </div>
         </div>
       `;
     }
@@ -1890,6 +1928,25 @@ const Main = {
         this.renderSettingsModal();
       };
     });
+
+    // hint tooltips (JS-driven in addition to CSS :hover; also flips side to avoid clipping)
+    content.onmouseover = (e) => {
+      const icon = e.target.closest && e.target.closest('.hint-icon');
+      if (!icon) return;
+      const tip = icon.querySelector('.hint-tip');
+      if (!tip) return;
+      icon.classList.add('show');
+      tip.style.left = ''; tip.style.right = '';
+      requestAnimationFrame(() => {
+        const cRect = content.getBoundingClientRect();
+        const tRect = tip.getBoundingClientRect();
+        if (tRect.right > cRect.right - 8) { tip.style.left = 'auto'; tip.style.right = '0'; }
+      });
+    };
+    content.onmouseout = (e) => {
+      const icon = e.target.closest && e.target.closest('.hint-icon');
+      if (icon && !icon.contains(e.relatedTarget)) icon.classList.remove('show');
+    };
 
     const archiveAfterDays = content.querySelector('#archiveAfterDays');
     if (archiveAfterDays) {
