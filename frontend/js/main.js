@@ -1628,7 +1628,6 @@ const Main = {
         </div>
         <div class="settings-group">
         <div class="settings-section-title">窗格与颜色</div>
-        <div class="settings-row">${this._toggle(s.showRestBadge === true, 'showRestBadge', '显示"休"字角标', '在周六周日与法定假日的窗格右上角显示绿色"休"角标;调休上班日仍显示"班"角标,不受此开关影响')}</div>
         <div class="settings-row">
           <div class="settings-row-label">周末窗格颜色${this._hint('给周六周日的窗格添加柔和颜色标识(仅日期格底色变化,不影响 today/选中态)')}</div>
           <div class="color-picker" data-onchange="weekendColor">
@@ -1657,6 +1656,7 @@ const Main = {
             ${this._colorSwatch('aurora', '极光', '#f0fdf4', '#ecfeff', s.holidayColor || 'none')}
           </div>
         </div>
+        <div class="settings-row">${this._toggle(s.showRestBadge === true, 'showRestBadge', '显示"休"字角标', '在周六周日与法定假日的窗格右上角显示浅底主题色"休"角标(跟随当前主题色);调休上班日仍显示"班"角标,不受此开关影响')}</div>
         <div class="settings-row">
           <div class="settings-row-label">当天开始事件条颜色${this._hint('自定义模式下,当天开始事件条使用白底+左色条+灰字(与进行中/截止风格一致)')}</div>
           ${this._seg([
