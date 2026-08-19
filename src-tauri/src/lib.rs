@@ -1436,7 +1436,7 @@ static AUMID_SET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool:
 fn set_explicit_aumid(hwnd: *mut std::ffi::c_void) -> Result<(), String> {
     use windows_sys::core::GUID;
     use windows_sys::Win32::Foundation::{S_OK, HWND};
-    use windows_sys::Win32::System::Com::StructuredStorage::{PropVariantClear, PROPVARIANT};
+    use windows_sys::Win32::System::Com::StructuredStorage::PROPVARIANT;
     use windows_sys::Win32::System::Variant::VT_LPWSTR;
     use windows_sys::Win32::UI::Shell::PropertiesSystem::{PROPERTYKEY, SHGetPropertyStoreForWindow};
 
@@ -1483,7 +1483,7 @@ fn set_explicit_aumid(hwnd: *mut std::ffi::c_void) -> Result<(), String> {
         }
         let vtbl = *(store as *mut *const IPropertyStoreVtbl);
         let hr_set = ((*vtbl).set_value)(store, &PKEY_APPUSERMODEL_ID, &pv);
-        PropVariantClear(&mut pv);
+        // 不能 PropVariantClear:它会 CoTaskMemFree pwszVal,而字符串是 Rust Vec 的内存,释放即堆损坏闪退
         let hr_commit = ((*vtbl).commit)(store);
         ((*vtbl).release)(store);
         if hr_set != S_OK || hr_commit != S_OK {
