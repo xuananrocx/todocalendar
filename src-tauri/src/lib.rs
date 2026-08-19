@@ -1425,7 +1425,7 @@ fn set_app_icon(app: tauri::AppHandle, name: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 记录我们 LoadImageW 加载的类图标句柄,替换时销毁旧句柄防 GDI 泄漏
+/// 记录我们 LoadImageW 加载并挂在窗口上的图标句柄,替换时销毁旧句柄防 GDI 泄漏
 #[cfg(target_os = "windows")]
 static TASKBAR_ICON_CACHE: std::sync::Mutex<(isize, isize)> = std::sync::Mutex::new((0, 0));
 
@@ -1437,8 +1437,8 @@ fn update_taskbar_icon(
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
-        DestroyIcon, GetSystemMetrics, LoadImageW, SetClassLongPtrW, GCLP_HICON, GCLP_HICONSM,
-        IMAGE_ICON, LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON,
+        DestroyIcon, GetSystemMetrics, LoadImageW, SendMessageW, ICON_BIG, ICON_SMALL, IMAGE_ICON,
+        LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, WM_SETICON,
     };
     type Handle = *mut std::ffi::c_void;
     let wide: Vec<u16> = ico_path
@@ -1473,8 +1473,9 @@ fn update_taskbar_icon(
             DestroyIcon(big);
             e
         })?;
-        SetClassLongPtrW(hwnd, GCLP_HICON, big as isize);
-        SetClassLongPtrW(hwnd, GCLP_HICONSM, small as isize);
+        // WM_SETICON 是任务栏唯一会收到通知的图标通道;类图标(SetClassLongPtr)不会触发刷新
+        SendMessageW(hwnd, WM_SETICON, ICON_BIG as usize, big as isize);
+        SendMessageW(hwnd, WM_SETICON, ICON_SMALL as usize, small as isize);
         let mut cache = TASKBAR_ICON_CACHE.lock().unwrap();
         let (old_big, old_small) = *cache;
         if old_big != 0 {
@@ -1485,7 +1486,7 @@ fn update_taskbar_icon(
         }
         *cache = (big as isize, small as isize);
     }
-    eprintln!("[icon] taskbar class icon updated");
+    eprintln!("[icon] window icons updated via WM_SETICON");
     Ok(())
 }
 
