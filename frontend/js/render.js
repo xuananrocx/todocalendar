@@ -1321,12 +1321,10 @@ const Render = {
       const arrow = document.createElement('span');
       arrow.className = 'day-arrow' + (hasChildren ? '' : ' empty');
       if (hasChildren) {
-        arrow.innerHTML = todo.expanded === false ? Icon.chevronRight() : Icon.chevronDown();
+        arrow.innerHTML = Main.dayIsExpanded(todo.id) ? Icon.chevronDown() : Icon.chevronRight();
         arrow.onclick = (e) => {
           e.stopPropagation();
-          const newExpanded = todo.expanded === false;
-          Main.applyLocalUpdate(todo.id, { expanded: newExpanded });
-          Main.sendUpdate(todo.id, { expanded: newExpanded });
+          Main.toggleDayExpand(todo.id);
         };
       }
       row.appendChild(arrow);
@@ -1351,9 +1349,7 @@ const Render = {
           } else {
             row._clickTimer = setTimeout(() => {
               row._clickTimer = null;
-              const newExpanded = todo.expanded === false;
-              Main.applyLocalUpdate(todo.id, { expanded: newExpanded });
-              Main.sendUpdate(todo.id, { expanded: newExpanded });
+              Main.toggleDayExpand(todo.id);
             }, 150);
           }
         } else {
@@ -1378,7 +1374,7 @@ const Render = {
         sub.style.marginLeft = `${36 + (depth - 1) * 24}px`;
         decorateRow(sub, k);
         container.appendChild(sub);
-        if (k.expanded !== false) {
+        if (Main.dayIsExpanded(k.id)) {
           renderSubtree(k.id, container, depth + 1);
         }
       }
@@ -1410,18 +1406,17 @@ const Render = {
 
       for (const entry of entries) {
         sec.appendChild(makeItem(entry.root));
-        if (entry.root.expanded !== false) {
+        if (Main.dayIsExpanded(entry.root.id)) {
           renderSubtree(entry.root.id, sec);
         }
       }
       body.appendChild(sec);
     }
 
-    // 更新一键折叠按钮状态
+    // 更新一键折叠按钮状态(基于日详情临时展开状态)
     const dayToggleBtn = document.getElementById('dayToggleExpand');
     if (dayToggleBtn) {
-      const parents = Main.parentTodos();
-      const anyExpanded = parents.some(todo => todo.expanded !== false);
+      const anyExpanded = Main.dayAnyExpanded();
       dayToggleBtn.innerHTML = anyExpanded ? Icon.chevronsUp() : Icon.chevronsDown();
       dayToggleBtn.title = anyExpanded ? '折叠全部' : '展开全部';
     }

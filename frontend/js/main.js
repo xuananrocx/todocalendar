@@ -5,6 +5,7 @@ const Main = {
     activeGroup: '__all__',
     calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     dayViewDate: null,
+    dayExpanded: null,
     hideDone: false,
     highlightId: null,
     settings: null,
@@ -850,6 +851,7 @@ const Main = {
     const t = this.state.todos.find(x => x.id === id);
     if (!t) return;
     Object.assign(t, patch);
+    if (this.state.dayExpanded && 'expanded' in patch) this.state.dayExpanded.set(id, patch.expanded !== false);
     Render.renderAll(this.state);
   },
 
@@ -910,6 +912,45 @@ const Main = {
       Render.renderAll(this.state);
       this.refreshExpandButton();
     }
+  },
+
+  // ===== 日详情独立展开状态(临时,退出即弃,不写库) =====
+  dayIsExpanded(id) {
+    const m = this.state.dayExpanded;
+    if (!m) return true;
+    return m.get(id) !== false;
+  },
+
+  toggleDayExpand(id) {
+    if (!this.state.dayExpanded) return;
+    this.state.dayExpanded.set(id, !this.dayIsExpanded(id));
+    Render.renderDayView(this.state);
+  },
+
+  // 当天视图里可见的父待办 id(一键展开只作用于这个范围)
+  _dayVisibleParentIds() {
+    const d = this.state.dayViewDate;
+    if (!d) return [];
+    const ids = new Set();
+    for (const e of Render.getRootDayEntries(this.state, d)) {
+      this.collectDescendants(e.root.id).forEach(id => ids.add(id));
+    }
+    return this.state.todos
+      .filter(t => ids.has(t.id) && this.state.todos.some(c => c.parentId === t.id))
+      .map(t => t.id);
+  },
+
+  dayAnyExpanded() {
+    return this._dayVisibleParentIds().some(id => this.dayIsExpanded(id));
+  },
+
+  toggleDayAllExpanded() {
+    if (!this.state.dayExpanded) return;
+    const ids = this._dayVisibleParentIds();
+    if (!ids.length) return;
+    const expand = !this.dayAnyExpanded();
+    for (const id of ids) this.state.dayExpanded.set(id, expand);
+    Render.renderDayView(this.state);
   },
 
   async moveTodo(id, parentId, index) {
@@ -984,6 +1025,7 @@ const Main = {
       if (done) patch.suspendedAt = null;
       if (did === rootId) Object.assign(patch, parentPatch);
       Object.assign(t, patch);
+      if (this.state.dayExpanded && patch.expanded !== undefined) this.state.dayExpanded.set(did, patch.expanded !== false);
     }
     Render.renderAll(this.state);
     // 2. 后端:批量递归 done
@@ -1701,6 +1743,15 @@ const Main = {
         </div>
         </div>
         <div class="settings-group">
+        <div class="settings-section-title">日详情</div>
+        <div class="settings-row">
+          <div class="settings-row-label">默认展开${this._hint('全折叠:进入日详情全部折叠;跟随列表:按列表当前展开状态快照;智能折叠:默认折叠,仅自动展开当天命中任务的祖先链(三种模式下的展开/折叠都不写库,退出即弃)')}</div>
+          ${this._seg([
+            {value:'all-collapsed',label:'全折叠'},{value:'follow-list',label:'跟随列表'},{value:'smart',label:'智能折叠'}
+          ], s.dayExpandDefault || 'all-collapsed', 'dayExpandDefault')}
+        </div>
+        </div>
+        <div class="settings-group">
         <div class="settings-section-title">节假日数据</div>
         <div class="settings-row">
           <div class="settings-row-label">节假日数据更新</div>
@@ -2128,7 +2179,7 @@ const Main = {
 
     // 日视图
     document.getElementById('dayBack').onclick = () => this.closeDayView();
-    document.getElementById('dayToggleExpand').onclick = () => this.toggleAllExpanded();
+    document.getElementById('dayToggleExpand').onclick = () => this.toggleDayAllExpanded();
     document.getElementById('dayAdd').onclick = () => {
       if (!this.state.dayViewDate) return;
       const d = this.state.dayViewDate;
@@ -2425,11 +2476,37 @@ const Main = {
   openDayView(date) {
     this.state.dayViewDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
     this.state.calMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    // 日详情独立展开状态,退出即弃,不写库
+    const mode = this.state.settings?.dayExpandDefault || 'all-collapsed';
+    if (mode === 'follow-list') {
+      // 跟随列表:进入时按当前列表展开状态快照
+      this.state.dayExpanded = new Map(this.state.todos.map(t => [t.id, t.expanded !== false]));
+    } else if (mode === 'smart') {
+      // 智能折叠:默认折叠,仅自动展开"当天命中任务"的祖先链
+      this.state.dayExpanded = new Map(this.state.todos.map(t => [t.id, false]));
+      const byId = new Map(this.state.todos.map(t => [t.id, t]));
+      for (const t of this.state.todos) {
+        if (!Render.getTodoDayHits(t, this.state.dayViewDate).length) continue;
+        let pid = t.parentId;
+        const seen = new Set();
+        while (pid && !seen.has(pid)) {
+          seen.add(pid);
+          const p = byId.get(pid);
+          if (!p) break;
+          this.state.dayExpanded.set(pid, true);
+          pid = p.parentId;
+        }
+      }
+    } else {
+      // 全折叠
+      this.state.dayExpanded = new Map(this.state.todos.map(t => [t.id, false]));
+    }
     Render.renderAll(this.state);
   },
 
   closeDayView() {
     this.state.dayViewDate = null;
+    this.state.dayExpanded = null;
     Render.renderAll(this.state);
   },
 

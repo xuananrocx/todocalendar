@@ -109,6 +109,7 @@ pub struct Settings {
     pub todo_item_custom_color: String,     // clay | blue | ... (when mode=custom)
     pub start_event_color_mode: String,     // theme | custom
     pub start_event_custom_color: String,   // amber | blue | ... (when mode=custom)
+    pub day_expand_default: String, // all-collapsed | follow-list | smart
     pub auto_sync_start: bool,
     pub auto_sync_end: bool,
     pub calendar_child_display: String, // current | main-only | main-child | child-main
@@ -166,6 +167,7 @@ impl Default for Settings {
             todo_item_custom_color: "aurora".into(),
             start_event_color_mode: "theme".into(),
             start_event_custom_color: "slate".into(),
+            day_expand_default: "all-collapsed".into(),
             auto_sync_start: false,
             auto_sync_end: true,
             calendar_child_display: "main-only".into(),
