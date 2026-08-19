@@ -1487,6 +1487,7 @@ const Main = {
     });
     const content = document.getElementById('settingsContent');
     content.innerHTML = this._settingsTabHtml(tab, s);
+    content.scrollTop = 0;
     Icon.render(content);
     this._bindSettingsContent(tab, s);
   },
