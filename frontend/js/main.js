@@ -1244,9 +1244,9 @@ const Main = {
     if (tab) this.state.settingsTab = tab;
     this.toggleDropdown(false);
     this.closeModal();  // 避免和编辑弹窗重叠
-    this.renderSettingsModal();
     document.getElementById('settingsMask').hidden = false;
     document.body.classList.add('modal-open');
+    this.renderSettingsModal(true);
   },
 
   closeSettingsModal() {
@@ -1476,18 +1476,20 @@ const Main = {
 
   setSettingsTab(tab) {
     this.state.settingsTab = tab;
-    this.renderSettingsModal();
+    this.renderSettingsModal(true);
   },
 
-  renderSettingsModal() {
+  renderSettingsModal(resetScroll = false) {
     const s = this.state.settings;
     const tab = this.state.settingsTab;
     document.querySelectorAll('.settings-nav-item').forEach(el => {
       el.classList.toggle('active', el.dataset.tab === tab);
     });
     const content = document.getElementById('settingsContent');
+    const scrollTop = content.scrollTop;
     content.innerHTML = this._settingsTabHtml(tab, s);
-    content.scrollTop = 0;
+    // 改设置项触发的重渲染保持滚动位置;重开/切页签才回顶部(需容器可见,否则 scrollTop 赋值无效)
+    content.scrollTop = resetScroll ? 0 : scrollTop;
     Icon.render(content);
     this._bindSettingsContent(tab, s);
   },
