@@ -1246,10 +1246,12 @@ const Main = {
     this.closeModal();  // 避免和编辑弹窗重叠
     this.renderSettingsModal();
     document.getElementById('settingsMask').hidden = false;
+    document.body.classList.add('modal-open');
   },
 
   closeSettingsModal() {
     document.getElementById('settingsMask').hidden = true;
+    document.body.classList.remove('modal-open');
   },
 
   confirmAction({ title = '确认操作', message, messageHtml, confirmText = '确认', danger = false, hideCancel = false }) {
