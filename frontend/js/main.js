@@ -1643,6 +1643,8 @@ const Main = {
           <div class="icon-picker" data-onchange="appIcon">
             ${this._iconSwatch('bf', s.appIcon, '日历带勾')}
             ${this._iconSwatch('b', s.appIcon, '纯对勾')}
+            ${this._iconSwatch('a1', s.appIcon, '日历兽·奶油')}
+            ${this._iconSwatch('a2', s.appIcon, '日历兽·丹宁')}
           </div>
         </div>
         </div>

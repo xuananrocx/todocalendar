@@ -39,6 +39,16 @@
       "icons/icon.ico"
     ],
     "resources": [
+      "icons/icon_a1_32.png",
+      "icons/icon_a1_64.png",
+      "icons/icon_a1_128.png",
+      "icons/icon_a1_256.png",
+      "icons/icon_a1.ico",
+      "icons/icon_a2_32.png",
+      "icons/icon_a2_64.png",
+      "icons/icon_a2_128.png",
+      "icons/icon_a2_256.png",
+      "icons/icon_a2.ico",
       "icons/icon_b_32.png",
       "icons/icon_b_64.png",
       "icons/icon_b_128.png",
