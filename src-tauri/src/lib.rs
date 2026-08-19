@@ -1373,12 +1373,11 @@ fn get_data_dir(app: tauri::AppHandle) -> String {
 
 /// 读取图标文件路径(打包资源 / dev fallback 到磁盘)
 fn resolve_icon_path(app: &tauri::AppHandle, name: &str) -> Option<std::path::PathBuf> {
+    resolve_icon_file(app, &format!("icon_{}_256.png", name))
+}
+
+fn resolve_icon_file(app: &tauri::AppHandle, filename: &str) -> Option<std::path::PathBuf> {
     use tauri::Manager;
-    let valid = matches!(name, "b" | "bf");
-    if !valid {
-        return None;
-    }
-    let filename = format!("icon_{}_256.png", name);
     // 打包模式:资源目录
     if let Some(resource) = app.path().resource_dir().ok() {
         let path = resource.join("icons").join(&filename);
@@ -1412,6 +1411,81 @@ fn set_app_icon(app: tauri::AppHandle, name: String) -> Result<(), String> {
         .set_icon(img)
         .map_err(|e| format!("设置窗口图标失败: {}", e))?;
     eprintln!("[icon] set_icon ok");
+    // WM_SETICON 只影响标题栏/Alt-Tab,任务栏跟随窗口类图标,需一并替换
+    #[cfg(target_os = "windows")]
+    {
+        let ico_path = resolve_icon_file(&app, &format!("icon_{}.ico", name))
+            .ok_or_else(|| format!("图标 ico {} 不存在", name))?;
+        let hwnd = window
+            .hwnd()
+            .map_err(|e| format!("获取窗口句柄失败: {}", e))?
+            .0;
+        update_taskbar_icon(hwnd as *mut std::ffi::c_void, &ico_path)?;
+    }
+    Ok(())
+}
+
+/// 记录我们 LoadImageW 加载的类图标句柄,替换时销毁旧句柄防 GDI 泄漏
+#[cfg(target_os = "windows")]
+static TASKBAR_ICON_CACHE: std::sync::Mutex<(isize, isize)> = std::sync::Mutex::new((0, 0));
+
+#[cfg(target_os = "windows")]
+fn update_taskbar_icon(
+    hwnd: *mut std::ffi::c_void,
+    ico_path: &std::path::Path,
+) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::GetLastError;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DestroyIcon, GetSystemMetrics, LoadImageW, SetClassLongPtrW, GCLP_HICON, GCLP_HICONSM,
+        IMAGE_ICON, LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON,
+    };
+    type Handle = *mut std::ffi::c_void;
+    let wide: Vec<u16> = ico_path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    unsafe fn load(wide: &[u16], cx: i32, cy: i32, what: &str) -> Result<Handle, String> {
+        let h = LoadImageW(
+            std::ptr::null_mut(),
+            wide.as_ptr(),
+            IMAGE_ICON,
+            cx,
+            cy,
+            LR_LOADFROMFILE,
+        );
+        if h.is_null() {
+            Err(format!("加载{}图标失败: {}", what, GetLastError()))
+        } else {
+            Ok(h)
+        }
+    }
+    unsafe {
+        let big = load(&wide, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), "大")?;
+        let small = load(
+            &wide,
+            GetSystemMetrics(SM_CXSMICON),
+            GetSystemMetrics(SM_CYSMICON),
+            "小",
+        )
+        .map_err(|e| {
+            DestroyIcon(big);
+            e
+        })?;
+        SetClassLongPtrW(hwnd, GCLP_HICON, big as isize);
+        SetClassLongPtrW(hwnd, GCLP_HICONSM, small as isize);
+        let mut cache = TASKBAR_ICON_CACHE.lock().unwrap();
+        let (old_big, old_small) = *cache;
+        if old_big != 0 {
+            DestroyIcon(old_big as Handle);
+        }
+        if old_small != 0 {
+            DestroyIcon(old_small as Handle);
+        }
+        *cache = (big as isize, small as isize);
+    }
+    eprintln!("[icon] taskbar class icon updated");
     Ok(())
 }
 
