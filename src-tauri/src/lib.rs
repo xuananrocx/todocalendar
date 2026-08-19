@@ -1420,7 +1420,6 @@ fn set_app_icon(app: tauri::AppHandle, name: String) -> Result<(), String> {
             .hwnd()
             .map_err(|e| format!("获取窗口句柄失败: {}", e))?
             .0;
-        set_explicit_aumid(hwnd as *mut std::ffi::c_void)?;
         update_taskbar_icon(hwnd as *mut std::ffi::c_void, &ico_path)?;
     }
     Ok(())
@@ -1428,74 +1427,20 @@ fn set_app_icon(app: tauri::AppHandle, name: String) -> Result<(), String> {
 
 /// 任务栏解析图标的顺序是 AUMID 匹配快捷方式在前:打包版开始菜单快捷方式指向内嵌
 /// 默认图标的 exe,任务栏会一直显示快捷方式图标而无视 WM_SETICON(标题栏仍跟随)。
-/// 给窗口设一个不与任何快捷方式匹配的显式 AUMID,任务栏才回退到 WM_SETICON 的窗口图标。
+/// 给进程设一个不与任何快捷方式匹配的显式 AUMID(Electron setAppUserModelId 同款机制),
+/// 任务栏才回退到 WM_SETICON 的窗口图标。必须在创建任何窗口之前调用。
+/// 注:不能用 SHGetPropertyStoreForWindow+SetValue 写窗口属性存储,实测在
+/// tauri/webview2 窗口上 SetValue 会在 PROPSYS.dll 内固定偏移 0x3062e 访问违例崩溃。
 #[cfg(target_os = "windows")]
-static AUMID_SET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-#[cfg(target_os = "windows")]
-fn set_explicit_aumid(hwnd: *mut std::ffi::c_void) -> Result<(), String> {
-    use windows_sys::core::GUID;
-    use windows_sys::Win32::Foundation::{S_OK, HWND};
-    use windows_sys::Win32::System::Com::StructuredStorage::PROPVARIANT;
-    use windows_sys::Win32::System::Variant::VT_LPWSTR;
-    use windows_sys::Win32::UI::Shell::PropertiesSystem::{PROPERTYKEY, SHGetPropertyStoreForWindow};
-
-    // windows-sys 0.59 没生成 IPropertyStore 接口,手写 vtable(IUnknown + GetCount/GetAt/GetValue/SetValue/Commit)
-    #[repr(C)]
-    struct IPropertyStoreVtbl {
-        _query_interface:
-            unsafe extern "system" fn(*mut std::ffi::c_void, *const GUID, *mut *mut std::ffi::c_void) -> i32,
-        _add_ref: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
-        release: unsafe extern "system" fn(*mut std::ffi::c_void) -> u32,
-        _get_count: unsafe extern "system" fn(*mut std::ffi::c_void, *mut u32) -> i32,
-        _get_at: unsafe extern "system" fn(*mut std::ffi::c_void, u32, *mut PROPERTYKEY) -> i32,
-        _get_value:
-            unsafe extern "system" fn(*mut std::ffi::c_void, *const PROPERTYKEY, *mut PROPVARIANT) -> i32,
-        set_value: unsafe extern "system" fn(
-            *mut std::ffi::c_void,
-            *const PROPERTYKEY,
-            *const PROPVARIANT,
-        ) -> i32,
-        commit: unsafe extern "system" fn(*mut std::ffi::c_void) -> i32,
-    }
-    // PKEY_AppUserModel_ID 与 IID_IPropertyStore,windows-sys 不带常量,按 SDK 头文件值手写
-    const PKEY_APPUSERMODEL_ID: PROPERTYKEY = PROPERTYKEY {
-        fmtid: GUID::from_u128(0x9F4C2855_9F79_4B39_A8D0_E1D42DE1D5F3),
-        pid: 5,
-    };
-    const IID_IPROPERTYSTORE: GUID = GUID::from_u128(0x886D8EEB_8CF2_4446_8D02_CDBA1DBDCF99);
-
-    if AUMID_SET.load(std::sync::atomic::Ordering::Relaxed) {
-        return Ok(());
-    }
+fn set_explicit_aumid() {
+    use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
     let id: Vec<u16> = "TodoCalendar.MainWindow\0".encode_utf16().collect();
-    unsafe {
-        let mut pv: PROPVARIANT = std::mem::zeroed();
-        // 布局: vt(u16)+3 保留字后联合体在偏移 8,直接按偏移写避免碰联合体字段
-        let base = &mut pv as *mut PROPVARIANT as *mut u16;
-        *base = VT_LPWSTR;
-        *(base.add(8) as *mut *mut u16) = id.as_ptr() as *mut u16;
-
-        let mut store: *mut std::ffi::c_void = std::ptr::null_mut();
-        let hr = SHGetPropertyStoreForWindow(hwnd as HWND, &IID_IPROPERTYSTORE, &mut store);
-        if hr != S_OK {
-            return Err(format!("SHGetPropertyStoreForWindow 失败: 0x{:08X}", hr as u32));
-        }
-        let vtbl = *(store as *mut *const IPropertyStoreVtbl);
-        let hr_set = ((*vtbl).set_value)(store, &PKEY_APPUSERMODEL_ID, &pv);
-        // 不能 PropVariantClear:它会 CoTaskMemFree pwszVal,而字符串是 Rust Vec 的内存,释放即堆损坏闪退
-        let hr_commit = ((*vtbl).commit)(store);
-        ((*vtbl).release)(store);
-        if hr_set != S_OK || hr_commit != S_OK {
-            return Err(format!(
-                "写入 AUMID 失败: set=0x{:08X} commit=0x{:08X}",
-                hr_set as u32, hr_commit as u32
-            ));
-        }
+    let hr = unsafe { SetCurrentProcessExplicitAppUserModelID(id.as_ptr()) };
+    if hr == 0 {
+        eprintln!("[icon] process AUMID set");
+    } else {
+        eprintln!("[icon] process AUMID failed: 0x{:08X}", hr as u32);
     }
-    AUMID_SET.store(true, std::sync::atomic::Ordering::Relaxed);
-    eprintln!("[icon] explicit AUMID set on main window");
-    Ok(())
 }
 
 /// 记录我们 LoadImageW 加载并挂在窗口上的图标句柄,替换时销毁旧句柄防 GDI 泄漏
@@ -1673,6 +1618,8 @@ fn set_todo_group(app: tauri::AppHandle, id: String, group_id: Option<String>) -
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    set_explicit_aumid();
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
