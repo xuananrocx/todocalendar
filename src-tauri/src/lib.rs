@@ -1438,7 +1438,7 @@ fn update_taskbar_icon(
     use windows_sys::Win32::Foundation::GetLastError;
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         DestroyIcon, GetSystemMetrics, LoadImageW, SendMessageW, ICON_BIG, ICON_SMALL, IMAGE_ICON,
-        LR_LOADFROMFILE, SM_CXICON, SM_CXSMICON, SM_CYICON, SM_CYSMICON, WM_SETICON,
+        LR_LOADFROMFILE, SM_CXICON, SM_CYICON, WM_SETICON,
     };
     type Handle = *mut std::ffi::c_void;
     let wide: Vec<u16> = ico_path
@@ -1463,16 +1463,12 @@ fn update_taskbar_icon(
     }
     unsafe {
         let big = load(&wide, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), "大")?;
-        let small = load(
-            &wide,
-            GetSystemMetrics(SM_CXSMICON),
-            GetSystemMetrics(SM_CYSMICON),
-            "小",
-        )
-        .map_err(|e| {
-            DestroyIcon(big);
-            e
-        })?;
+        // Win11 任务栏忽略过小的 ICON_SMALL(16px 时只改标题栏),必须挂大图才会刷新
+        let small = load(&wide, 256, 256, "小")
+            .map_err(|e| {
+                DestroyIcon(big);
+                e
+            })?;
         // WM_SETICON 是任务栏唯一会收到通知的图标通道;类图标(SetClassLongPtr)不会触发刷新
         SendMessageW(hwnd, WM_SETICON, ICON_BIG as usize, big as isize);
         SendMessageW(hwnd, WM_SETICON, ICON_SMALL as usize, small as isize);
