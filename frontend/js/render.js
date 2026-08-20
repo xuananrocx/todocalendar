@@ -503,7 +503,7 @@ const Render = {
       }
     };
 
-    renderOneGroup('__default__', 'Default');
+    renderOneGroup('__default__', state.settings?.defaultGroupName || 'Default', state.settings?.defaultGroupColor || null);
     for (const g of groups) renderOneGroup(g.id, g.name, g.color || null);
     if (!tree.children.length) {
       const empty = document.createElement('div');

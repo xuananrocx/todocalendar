@@ -54,11 +54,6 @@
       "icons/icon_b_128.png",
       "icons/icon_b_256.png",
       "icons/icon_b.ico",
-      "icons/icon_bf_32.png",
-      "icons/icon_bf_64.png",
-      "icons/icon_bf_128.png",
-      "icons/icon_bf_256.png",
-      "icons/icon_bf.ico",
       "resources/holidays.json"
     ],
     "category": "Productivity",

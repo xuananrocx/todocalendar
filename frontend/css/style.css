@@ -1185,7 +1185,7 @@ body.bulk-mode .drag-handle { display: none; }
 .group-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   overflow-x: auto;
   flex: 1;
   min-width: 0;
@@ -1193,8 +1193,10 @@ body.bulk-mode .drag-handle { display: none; }
 .group-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 5px 12px;
+  width: calc(4em + 48px);
   border-radius: 6px;
   font-size: 13px;
   color: var(--muted);
@@ -1202,6 +1204,12 @@ body.bulk-mode .drag-handle { display: none; }
   white-space: nowrap;
   transition: background .12s, color .12s;
 }
+.group-tab-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.group-tab[data-id='__all__'] { width: auto; }
 .group-tab:hover { background: var(--hover-bg); color: var(--text); }
 .group-tab.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
 .group-tab.drop-hint { outline: 2px dashed var(--primary); outline-offset: -2px; }

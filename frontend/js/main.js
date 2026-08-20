@@ -864,10 +864,11 @@ const Main = {
     groups.sort((a, b) => (a.order || 0) - (b.order || 0));
     const active = this.state.activeGroup || '__all__';
     const tabs = [];
-    tabs.push(`<div class="group-tab ${active === '__all__' ? 'active' : ''}" data-id="__all__" title="全部">全部</div>`);
-    tabs.push(`<div class="group-tab ${active === '__default__' ? 'active' : ''}" data-id="__default__" title="Default">Default</div>`);
+    tabs.push(`<div class="group-tab ${active === '__all__' ? 'active' : ''}" data-id="__all__" title="全部"><span class="group-tab-label">全部</span></div>`);
+    const defName = this.defaultGroupName();
+    tabs.push(`<div class="group-tab ${active === '__default__' ? 'active' : ''}" data-id="__default__" title="${defName}"><span class="group-tab-label">${defName}</span><span class="group-tab-menu" data-id="__default__">⋯</span></div>`);
     for (const g of groups) {
-      tabs.push(`<div class="group-tab ${active === g.id ? 'active' : ''}" data-id="${g.id}" title="${g.name}">${g.name}<span class="group-tab-menu" data-id="${g.id}">⋯</span></div>`);
+      tabs.push(`<div class="group-tab ${active === g.id ? 'active' : ''}" data-id="${g.id}" title="${g.name}"><span class="group-tab-label">${g.name}</span><span class="group-tab-menu" data-id="${g.id}">⋯</span></div>`);
     }
     bar.innerHTML = tabs.join('');
     let dragTabId = null;
@@ -921,6 +922,14 @@ const Main = {
 
   _GROUP_COLORS: ['#D97757', '#3B82F6', '#06B6D4', '#10B981', '#F97316', '#EF4444', '#14B8A6', '#6B7280'],
 
+  defaultGroupName() {
+    return this.state.settings?.defaultGroupName || 'Default';
+  },
+
+  defaultGroupColor() {
+    return this.state.settings?.defaultGroupColor || null;
+  },
+
   _renderGroupColorPicker() {
     const box = document.getElementById('groupColorPicker');
     box.innerHTML = '';
@@ -942,6 +951,17 @@ const Main = {
   },
 
   openGroupEdit(id) {
+    if (id === '__default__') {
+      this._editingGroupId = '__default__';
+      document.getElementById('groupModalTitle').textContent = '编辑分组';
+      document.getElementById('fGroupEditName').value = this.defaultGroupName();
+      document.getElementById('btnGroupDelete').hidden = true;
+      this._pendingGroupColor = this.defaultGroupColor();
+      this._renderGroupColorPicker();
+      document.getElementById('groupMask').hidden = false;
+      document.getElementById('fGroupEditName').focus();
+      return;
+    }
     const group = (this.state.groups || []).find(g => g.id === id);
     if (!group) return;
     this._editingGroupId = id;
@@ -976,6 +996,12 @@ const Main = {
     const color = this._pendingGroupColor || null;
     if (!name) { alert('请输入分组名称'); return; }
     try {
+      if (id === '__default__') {
+        await this.patchSettings({ defaultGroupName: name, defaultGroupColor: color });
+        this.closeGroupModal();
+        this.renderGroupBar();
+        return;
+      }
       if (!id) {
         await API.createGroup(name, color);
         this.state.activeGroup = '__all__';
@@ -995,7 +1021,7 @@ const Main = {
     if (!group) return;
     const confirmed = await this.confirmAction({
       title: '删除分组',
-      message: `确定删除分组 "${group.name}"?组内待办将移到 Default。`,
+      message: `确定删除分组 "${group.name}"?组内待办将移到 ${this.defaultGroupName()}。`,
       confirmText: '删除',
       danger: true,
     });
@@ -1877,7 +1903,7 @@ const Main = {
         </div>
         <div class="settings-group">
         <div class="settings-section-title">分组</div>
-        <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
+        <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,可改名改色,不可删除)')}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤', s.enableGroups !== true)}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部', s.enableGroups !== true)}</div>
         </div>
@@ -1896,10 +1922,9 @@ const Main = {
         <div class="settings-section-title">应用图标</div>
         <div class="settings-row">
           <div class="icon-picker" data-onchange="appIcon">
-            ${this._iconSwatch('bf', s.appIcon, '日历带勾')}
-            ${this._iconSwatch('b', s.appIcon, '纯对勾')}
-            ${this._iconSwatch('a1', s.appIcon, '日历兽·奶油')}
-            ${this._iconSwatch('a2', s.appIcon, '日历兽·丹宁')}
+            ${this._iconSwatch('b', ['b','a1','a2'].includes(s.appIcon) ? s.appIcon : 'b', '纯对勾')}
+            ${this._iconSwatch('a1', ['b','a1','a2'].includes(s.appIcon) ? s.appIcon : 'b', '日历兽·奶油')}
+            ${this._iconSwatch('a2', ['b','a1','a2'].includes(s.appIcon) ? s.appIcon : 'b', '日历兽·丹宁')}
           </div>
         </div>
         </div>
@@ -2801,7 +2826,7 @@ const Main = {
   _populateGroupSelect(cs, selected = '') {
     if (!cs) return;
     const groups = [...(this.state.groups || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-    const items = [{ value: '', label: 'Default', depth: 0 }]
+    const items = [{ value: '', label: this.defaultGroupName(), depth: 0 }]
       .concat(groups.map(g => ({ value: g.id, label: g.name, depth: 0 })));
     cs.setOptions(items, selected);
   },

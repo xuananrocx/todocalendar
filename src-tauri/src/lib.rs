@@ -101,7 +101,7 @@ pub struct Settings {
     pub notes_display: String,     // none | hover | inline
     pub theme_color: String,       // clay | blue | cyan | red | ink | sunset | deep | aurora | flame
     pub show_time_precision: bool,
-    pub app_icon: String,          // b | bf
+    pub app_icon: String,          // b | a1 | a2
     pub enable_groups: bool,
     pub font_color: String,        // default | warm1 | warm2 | warm3
     pub day_item_color_mode: String,        // theme | none | custom
@@ -127,6 +127,8 @@ pub struct Settings {
     pub priority_auto_top: bool,    // 自动排序模式下优先待办置顶
     pub calendar_follow_group: bool, // 日历/日详情跟随分组筛选
     pub stats_follow_group: bool,   // 统计条跟随分组筛选
+    pub default_group_name: String,      // 内置 Default 分组显示名
+    pub default_group_color: Option<String>, // 内置 Default 分组卡片色
 }
 
 impl Default for Settings {
@@ -186,6 +188,8 @@ impl Default for Settings {
             priority_auto_top: true,
             calendar_follow_group: true,
             stats_follow_group: false,
+            default_group_name: "Default".into(),
+            default_group_color: None,
         }
     }
 }
@@ -1516,7 +1520,11 @@ fn update_taskbar_icon(
 
 fn apply_app_icon_on_startup(app: &tauri::AppHandle) {
     let settings = load_settings(&settings_file(app));
-    let name = settings.app_icon;
+    // 存量配置可能是被移除的图标(如 bf),回落默认 b
+    let name = match settings.app_icon.as_str() {
+        "b" | "a1" | "a2" => settings.app_icon,
+        _ => "b".to_string(),
+    };
     eprintln!("[icon] startup applying icon: {}", name);
     match set_app_icon(app.clone(), name) {
         Ok(_) => eprintln!("[icon] startup ok"),
