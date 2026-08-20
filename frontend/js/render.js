@@ -264,11 +264,27 @@ const Render = {
       || String(a.todo.id).localeCompare(String(b.todo.id));
   },
 
+  // 按当前分组 tab 过滤(全部/未启用分组时不过滤)
+  groupFilteredTodos(state) {
+    const s = state.settings;
+    if (!s?.enableGroups) return state.todos;
+    const active = state.activeGroup || '__all__';
+    if (active === '__all__') return state.todos;
+    if (active === '__default__') return state.todos.filter(t => !t.groupId);
+    return state.todos.filter(t => t.groupId === active);
+  },
+
+  // 日历/日详情可见的待办:受"日历跟随分组筛选"开关控制
+  calendarTodos(state) {
+    if (state.settings?.calendarFollowGroup === false) return state.todos;
+    return Render.groupFilteredTodos(state);
+  },
+
   getRootDayEntries(state, date) {
     const byId = new Map(state.todos.map(todo => [todo.id, todo]));
     const entries = new Map();
 
-    for (const todo of state.todos) {
+    for (const todo of Render.calendarTodos(state)) {
       const hits = Render.getTodoDayHits(todo, date);
       if (!hits.length) continue;
       const rootId = Render.getRootId(state.todos, todo.id, byId);
@@ -937,9 +953,12 @@ const Render = {
 
   renderStats(state) {
     const stats = document.getElementById('stats');
-    const total = state.todos.length;
-    const done = state.todos.filter(t => t.done).length;
-    const overdue = state.todos.filter(t => Render.isOverdue(t)).length;
+    const s = state.settings;
+    // 开启"统计条跟随分组筛选"时按当前分组统计,默认统计全部
+    const scope = (s?.enableGroups && s.statsFollowGroup === true) ? Render.groupFilteredTodos(state) : state.todos;
+    const total = scope.length;
+    const done = scope.filter(t => t.done).length;
+    const overdue = scope.filter(t => Render.isOverdue(t)).length;
     const inProgress = total - done - overdue;
     const style = (state.settings && state.settings.statsStyle) || 'text';
     stats.hidden = style === 'none';

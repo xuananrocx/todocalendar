@@ -876,7 +876,7 @@ const Main = {
         if (e.target.classList.contains('group-tab-menu')) return;
         this.state.activeGroup = el.dataset.id;
         this.renderGroupBar();
-        Render.renderList(this.state);
+        Render.renderAll(this.state);
       });
       // 具体分组 tab 可拖拽排序(全部/Default 固定)
       const tabId = el.dataset.id;
@@ -940,6 +940,7 @@ const Main = {
       if (!confirmed) return;
       try {
         await API.deleteGroup(id);
+        if (this.state.activeGroup === id) this.state.activeGroup = '__all__';
         await this.reload();
       } catch (e) { alert('删除分组失败:' + window.__tauriErrMsg(e)); }
       return;
@@ -2064,6 +2065,8 @@ const Main = {
           ], s.dragMode || 'sibling', 'dragMode')}
         </div>
         <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
+        <div class="settings-row">${this._toggle(s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤')}</div>
+        <div class="settings-row">${this._toggle(s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部')}</div>
         <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示分组对应的分类图标(按分组即分类的规划,图标列功能尚未实现)')}</div>
         </div>
         <div class="settings-group">
