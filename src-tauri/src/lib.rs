@@ -73,7 +73,8 @@ pub struct Data {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
-    pub theme: String,     // light | dark | system
+    pub theme: String,     // light | dark | system | glass-light | glass-dark
+    pub glass_strength: u32, // 玻璃主题强度 0-100(透明度+模糊)
     pub font_size: String, // small | medium | large
     pub compact: bool,
     pub week_start: String, // monday | sunday
@@ -136,6 +137,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: "light".into(),
+            glass_strength: 60,
             font_size: "medium".into(),
             compact: false,
             week_start: "monday".into(),

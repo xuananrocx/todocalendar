@@ -1091,12 +1091,17 @@ const Main = {
   applySettingsToDom() {
     const s = this.state.settings || {};
     const html = document.documentElement;
-    // theme=system 时解析成实际 light/dark
+    // theme=system 时解析成实际 light/dark;玻璃主题解析成对应明暗 + data-glass 标记
     let theme = s.theme || 'light';
-    if (theme === 'system') {
+    let glass = null;
+    if (theme === 'glass-light') { theme = 'light'; glass = 'light'; }
+    else if (theme === 'glass-dark') { theme = 'dark'; glass = 'dark'; }
+    else if (theme === 'system') {
       theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
     html.setAttribute('data-theme', theme);
+    if (glass) html.setAttribute('data-glass', glass); else html.removeAttribute('data-glass');
+    this._applyGlassVars();
     html.setAttribute('data-font-size', s.fontSize || 'medium');
     html.setAttribute('data-compact', s.compact ? 'true' : 'false');
     html.setAttribute('data-numbering-palette', s.numberingPalette || 'classic');
@@ -1499,6 +1504,13 @@ const Main = {
     if (shouldOpen) this.toggleSortDropdown(false);
     dd.hidden = !shouldOpen;
     btn.classList.toggle('active', shouldOpen);
+    if (shouldOpen) {
+      // 传送门:挂到 body 顶层再定位,逃出毛玻璃祖先的 backdrop-filter 层叠陷阱
+      if (dd.parentElement !== document.body) document.body.appendChild(dd);
+      const r = btn.getBoundingClientRect();
+      dd.style.top = `${Math.round(r.bottom + 6)}px`;
+      dd.style.right = `${Math.round(window.innerWidth - r.right)}px`;
+    }
   },
 
   async openHelp() {
@@ -1988,6 +2000,20 @@ const Main = {
           ], s.theme, 'theme')}
         </div>
         <div class="settings-row">
+          <div class="settings-row-label">玻璃主题<span class="beta-tag">试验性</span>${this._hint('iOS 风格毛玻璃:底层壁纸+半透明磨砂面板,效果仍在打磨')}</div>
+          ${this._seg([
+            {value:'glass-light',label:'玻璃·浅'},{value:'glass-dark',label:'玻璃·深'}
+          ], s.theme, 'theme')}
+        </div>
+        ${(s.theme === 'glass-light' || s.theme === 'glass-dark') ? `
+        <div class="settings-row">
+          <div class="settings-row-label">玻璃强度${this._hint('控制玻璃面板的通透程度:右移更透更糊,左移更接近实心面板')}</div>
+          <div class="glass-strength-row">
+            <input type="range" id="glassStrength" min="0" max="100" value="${Number.isFinite(+s.glassStrength) ? +s.glassStrength : 60}">
+            <span id="glassStrengthVal">${Number.isFinite(+s.glassStrength) ? +s.glassStrength : 60}</span>
+          </div>
+        </div>` : ''}
+        <div class="settings-row">
           <div class="settings-row-label">主题色</div>
           <div class="color-picker" data-onchange="themeColor">
             ${this._colorSwatch('clay', '陶土', '#D97757', null, s.themeColor)}
@@ -2345,6 +2371,20 @@ const Main = {
       });
     });
 
+    // 玻璃强度滑杆:拖动实时生效,松手落库
+    const gs = content.querySelector('#glassStrength');
+    if (gs) {
+      const gsVal = content.querySelector('#glassStrengthVal');
+      gs.addEventListener('input', () => {
+        gsVal.textContent = gs.value;
+        this.state.settings.glassStrength = Number(gs.value);
+        this._applyGlassVars();
+      });
+      gs.addEventListener('change', () => {
+        this.patchSettings({ glassStrength: Number(gs.value) });
+      });
+    }
+
     // palette picker
     content.querySelectorAll('.palette-swatch').forEach(sw => {
       sw.onclick = () => {
@@ -2478,6 +2518,20 @@ const Main = {
     mql.addEventListener('change', () => {
       if ((this.state.settings || {}).theme === 'system') this.applySettingsToDom();
     });
+  },
+
+  // 玻璃主题:强度 0-100 → 不透明度 .95→.45(越右越透) / 模糊 4→28px / 饱和 110→150%
+  _applyGlassVars() {
+    const html = document.documentElement;
+    const glass = html.getAttribute('data-glass');
+    if (!glass) { html.style.removeProperty('--glass-bg'); return; }
+    let v = Number((this.state.settings || {}).glassStrength);
+    if (!Number.isFinite(v)) v = 60;
+    v = Math.min(100, Math.max(0, v));
+    const tint = glass === 'light' ? '255,255,255' : '20,24,38';
+    html.style.setProperty('--glass-bg', `rgba(${tint},${(0.95 - v / 100 * 0.5).toFixed(3)})`);
+    html.style.setProperty('--glass-blur', (4 + v / 100 * 24).toFixed(1) + 'px');
+    html.style.setProperty('--glass-sat', Math.round(110 + v / 100 * 40) + '%');
   },
 
   bindEvents() {
@@ -2863,6 +2917,7 @@ const Main = {
     const s = this.state.settings || {};
     const labels = {
       light: '浅色', dark: '深色', system: '跟随系统',
+      'glass-light': '玻璃·浅', 'glass-dark': '玻璃·深',
       small: '小', medium: '中', large: '大',
       monday: '周一', sunday: '周日',
     };

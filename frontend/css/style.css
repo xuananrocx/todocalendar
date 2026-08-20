@@ -2237,6 +2237,8 @@ body.bulk-mode .drag-handle { display: none; }
   border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.08);
   padding: 4px; z-index: 100;
 }
+/* 齿轮菜单:打开时由 JS 挂到 body 定位,逃出毛玻璃祖先的层叠陷阱 */
+#dropdown { position: fixed; z-index: 900; }
 .dropdown[hidden] { display: none !important; }
 .dropdown-group-label {
   font-size: 10px; color: var(--muted);
@@ -2321,6 +2323,7 @@ body.bulk-mode .drag-handle { display: none; }
 .hint-icon:hover .hint-tip, .hint-icon.show .hint-tip { display: block; }
 .settings-row { margin-bottom: 16px; }
 .settings-row-label { font-size: 12px; color: var(--text); margin-bottom: 10px; font-weight: 500; }
+.beta-tag { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; margin-left: 6px; font-weight: 400; vertical-align: 1px; }
 .settings-row-desc { font-size: 10px; color: var(--muted); margin-top: 4px; }
 /* 内缩边框盒,与卡片边缘留出间距,避免与卡片边框贴边重叠 */
 .settings-group .settings-row.archive-days-row {
@@ -2478,6 +2481,110 @@ body.bulk-mode .drag-handle { display: none; }
 }
 [data-theme="dark"] .cal-cell.selected {
   box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 35%, transparent), inset 0 1px 0 rgba(255,255,255,.06);
+}
+
+/* ===== 主题: 玻璃(浅/深) =====
+   复用对应明暗主题全部变量与规则,此处仅做透明化覆盖;
+   --glass-bg/--glass-blur/--glass-sat 由 JS 按强度滑杆写入 */
+html[data-glass="light"] {
+  --panel: var(--glass-bg, rgba(255,255,255,.65));
+  --card: var(--glass-bg, rgba(255,255,255,.65));
+  --border: rgba(31,41,55,.14);
+  --hover-bg: rgba(255,255,255,.55);
+  --glass-rim: rgba(255,255,255,.5);
+  --glass-mask: rgba(243,240,234,.35);
+  --glass-menu: #ffffff;
+}
+html[data-glass="dark"] {
+  --panel: var(--glass-bg, rgba(20,24,38,.58));
+  --card: var(--glass-bg, rgba(20,24,38,.58));
+  --border: rgba(255,255,255,.12);
+  --hover-bg: rgba(255,255,255,.1);
+  --glass-rim: rgba(255,255,255,.07);
+  --glass-mask: rgba(6,9,16,.45);
+  --glass-menu: #171b26;
+}
+/* 底层壁纸(替代纯色背景,玻璃渗透靠它) */
+html[data-glass="light"] body {
+  background:
+    radial-gradient(640px at 12% 18%, rgba(255,180,140,.60), transparent 62%),
+    radial-gradient(760px at 88% 12%, rgba(150,190,255,.55), transparent 62%),
+    radial-gradient(820px at 72% 88%, rgba(170,230,200,.50), transparent 62%),
+    radial-gradient(560px at 20% 82%, rgba(250,195,210,.48), transparent 62%),
+    linear-gradient(160deg, #f7f4ee, #eef1f6);
+  background-attachment: fixed;
+}
+html[data-glass="dark"] body {
+  background:
+    radial-gradient(700px at 16% 20%, rgba(120,110,240,.34), transparent 62%),
+    radial-gradient(760px at 88% 16%, rgba(224,122,95,.26), transparent 62%),
+    radial-gradient(880px at 68% 90%, rgba(14,170,190,.24), transparent 62%),
+    linear-gradient(160deg, #0c1122, #141020 55%, #0a0e18);
+  background-attachment: fixed;
+}
+/* 大表面:磨砂玻璃(无投影,仅顶部内高光);行级小元素只继承半透明变量不加模糊 */
+html[data-glass] .topbar,
+html[data-glass] .gb-solo .topbar-main,
+html[data-glass] .gb-solo .group-bar,
+html[data-glass] .group-card,
+html[data-glass] .calendar-section,
+html[data-glass] .day-view,
+html[data-glass] .modal,
+html[data-glass] .prompt-modal,
+html[data-glass] .group-manage,
+html[data-glass] .dropdown,
+html[data-glass] .cs-menu,
+html[data-glass] .bulk-action-bar,
+html[data-glass] .history-view-inner,
+html[data-glass] .notes-tooltip,
+html[data-glass] .hint-tip {
+  -webkit-backdrop-filter: blur(var(--glass-blur, 18px)) saturate(var(--glass-sat, 135%));
+  backdrop-filter: blur(var(--glass-blur, 18px)) saturate(var(--glass-sat, 135%));
+  box-shadow: inset 0 1px 0 var(--glass-rim, rgba(255,255,255,.3));
+}
+/* 弹窗蒙层:整体磨砂 */
+html[data-glass] .modal-mask,
+html[data-glass] .prompt-mask {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  background: var(--glass-mask);
+}
+/* 毛玻璃下顶栏分组条显式压低层叠,防止合成层 glitch 盖住右上角下拉 */
+html[data-glass] .group-bar { z-index: 0; }
+/* 锚定菜单类浮层:不跟随强度滑杆,高不透明度保证压住背后内容 */
+html[data-glass] .dropdown,
+html[data-glass] .group-manage,
+html[data-glass] .cs-menu {
+  background: var(--glass-menu);
+}
+/* 玻璃实底菜单上的 hover 可见性(半透明白 hover 在实底上不可见) */
+html[data-glass="light"] .dropdown-item:hover,
+html[data-glass="light"] .gm-row:hover { background: rgba(31,41,55,.08); }
+html[data-glass="dark"] .dropdown-item:hover,
+html[data-glass="dark"] .gm-row:hover { background: rgba(255,255,255,.1); }
+/* 玻璃强度滑杆:轨道画成 100%-12px 居中细条,两端正好对齐 thumb 圆心,0/100 无空余 */
+.glass-strength-row { display: flex; align-items: center; gap: 8px; }
+.glass-strength-row #glassStrengthVal { min-width: 2em; text-align: right; color: var(--muted); font-size: 12px; }
+#glassStrength {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 14px;
+  margin: 0;
+  background-color: transparent;
+  background-image: linear-gradient(var(--border), var(--border));
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: calc(100% - 24px) 4px;
+  outline: none;
+  cursor: pointer;
+}
+#glassStrength::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--primary);
 }
 
 @media (max-width: 680px) {
