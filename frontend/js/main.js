@@ -866,15 +866,14 @@ const Main = {
     const tabs = [];
     tabs.push(`<div class="group-tab ${active === '__all__' ? 'active' : ''}" data-id="__all__" title="全部"><span class="group-tab-label">全部</span></div>`);
     const defName = this.defaultGroupName();
-    tabs.push(`<div class="group-tab ${active === '__default__' ? 'active' : ''}" data-id="__default__" title="${defName}"><span class="group-tab-label">${defName}</span><span class="group-tab-menu" data-id="__default__">⋯</span></div>`);
+    tabs.push(`<div class="group-tab ${active === '__default__' ? 'active' : ''}" data-id="__default__" title="${defName}"><span class="group-tab-label">${defName}</span></div>`);
     for (const g of groups) {
-      tabs.push(`<div class="group-tab ${active === g.id ? 'active' : ''}" data-id="${g.id}" title="${g.name}"><span class="group-tab-label">${g.name}</span><span class="group-tab-menu" data-id="${g.id}">⋯</span></div>`);
+      tabs.push(`<div class="group-tab ${active === g.id ? 'active' : ''}" data-id="${g.id}" title="${g.name}"><span class="group-tab-label">${g.name}</span></div>`);
     }
     bar.innerHTML = tabs.join('');
     let dragTabId = null;
     bar.querySelectorAll('.group-tab').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        if (e.target.classList.contains('group-tab-menu')) return;
+      el.addEventListener('click', () => {
         this.state.activeGroup = el.dataset.id;
         this.renderGroupBar();
         Render.renderAll(this.state);
@@ -912,12 +911,43 @@ const Main = {
         };
       }
     });
-    bar.querySelectorAll('.group-tab-menu').forEach((el) => {
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.openGroupEdit(el.dataset.id);
-      });
+  },
+
+  closeGroupManage() {
+    document.getElementById('groupManagePop')?.remove();
+    if (this._gmCleanup) { this._gmCleanup(); this._gmCleanup = null; }
+  },
+
+  toggleGroupManage() {
+    if (document.getElementById('groupManagePop')) { this.closeGroupManage(); return; }
+    const groups = [...(this.state.groups || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const row = (id, name, color, tag) => {
+      const dot = color
+        ? `<span class="gm-dot" style="background:${color}"></span>`
+        : `<span class="gm-dot none"></span>`;
+      return `<div class="gm-row" data-id="${id}">${dot}<span class="gm-name">${name}</span>${tag ? '<span class="gm-tag">内置</span>' : ''}<svg class="gm-edit" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg></div>`;
+    };
+    const pop = document.createElement('div');
+    pop.id = 'groupManagePop';
+    pop.className = 'group-manage';
+    pop.innerHTML = '<div class="gm-new"><span class="gm-txt"><span class="gm-plus">＋</span>新建分组</span></div>'
+      + row('__default__', this.defaultGroupName(), this.defaultGroupColor(), true)
+      + groups.map(g => row(g.id, g.name, g.color || null, false)).join('');
+    document.getElementById('groupBar').appendChild(pop);
+    pop.querySelector('.gm-new').onclick = () => { this.closeGroupManage(); this.openGroupCreate(); };
+    pop.querySelectorAll('.gm-row').forEach(r => {
+      r.onclick = () => { this.closeGroupManage(); this.openGroupEdit(r.dataset.id); };
     });
+    this._gmOutside = (e) => {
+      if (!pop.contains(e.target) && !e.target.closest('#btnGroupAdd')) this.closeGroupManage();
+    };
+    this._gmEsc = (e) => { if (e.key === 'Escape') this.closeGroupManage(); };
+    document.addEventListener('mousedown', this._gmOutside);
+    document.addEventListener('keydown', this._gmEsc);
+    this._gmCleanup = () => {
+      document.removeEventListener('mousedown', this._gmOutside);
+      document.removeEventListener('keydown', this._gmEsc);
+    };
   },
 
   _GROUP_COLORS: ['#D97757', '#3B82F6', '#06B6D4', '#10B981', '#F97316', '#EF4444', '#14B8A6', '#6B7280'],
@@ -2481,7 +2511,7 @@ const Main = {
     const btnHistoryDeleteAll = document.getElementById('btnHistoryDeleteAll');
     if (btnHistoryDeleteAll) btnHistoryDeleteAll.onclick = () => this.openDeleteAllModal();
     const btnGroupAdd = document.getElementById('btnGroupAdd');
-    if (btnGroupAdd) btnGroupAdd.onclick = () => this.openGroupCreate();
+    if (btnGroupAdd) btnGroupAdd.onclick = () => this.toggleGroupManage();
     document.getElementById('btnRangeCancel').onclick = () => this.closeRangeDeleteModal();
     document.getElementById('btnRangeConfirm').onclick = () => this.confirmRangeDelete();
     document.getElementById('rangeStart').oninput = () => this._refreshRangeCount();
