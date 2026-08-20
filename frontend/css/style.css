@@ -80,15 +80,18 @@ body {
 
 /* 顶部 */
 .topbar {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; flex-direction: column;
   background: var(--panel);
-  padding: 10px 14px;
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,.04);
   position: relative;
   z-index: 1;
 }
-.topbar > * { position: relative; z-index: 1; }
+.topbar-main {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px 20px;
+}
+.topbar-main > * { position: relative; z-index: 1; }
 .brand { font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
 .stats { color: var(--muted); font-size: 12px; }
 .stats.stats-chip, .stats.stats-bar {
@@ -1175,14 +1178,34 @@ body.bulk-mode .drag-handle { display: none; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
-  background: var(--panel);
-  border-radius: 8px;
+  padding: 12px 24px 12px;
   position: relative;
-  margin-bottom: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+/* 分割横线:两侧各留 20px 空隙,不满贯 */
+.group-bar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 15%, var(--panel));
 }
 .group-bar[hidden] { display: none !important; }
+/* 独立卡片模式:分组栏不并入顶栏,单独成卡 */
+.gb-solo { background: transparent; box-shadow: none; }
+.gb-solo .topbar-main {
+  background: var(--panel);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+}
+.gb-solo .group-bar {
+  background: var(--panel);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  margin-top: 10px;
+  padding: 6px 14px;
+}
+.gb-solo .group-bar::before { display: none; }
 .group-tabs {
   display: flex;
   align-items: center;

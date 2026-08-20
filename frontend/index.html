@@ -10,8 +10,9 @@
 </head>
 <body>
 <div class="app">
-  <!-- 顶部栏 -->
+  <!-- 顶部栏(含分组栏,启用分组时收进同一张卡片) -->
   <header class="topbar">
+    <div class="topbar-main">
     <div class="brand"><i data-icon="calendar"></i> TodoCalendar</div>
     <div class="stats" id="stats">— 待办 · — 完成</div>
     <div class="actions">
@@ -76,6 +77,13 @@
         </div>
       </div>
     </div>
+    </div>
+
+    <!-- 分组栏(开启分组时显示) -->
+    <div class="group-bar" id="groupBar" hidden>
+      <div class="group-tabs" id="groupTabs"></div>
+      <button class="group-add" id="btnGroupAdd" title="分组管理">+</button>
+    </div>
   </header>
 
   <!-- 批量操作栏(进入批量模式时显示) -->
@@ -89,12 +97,6 @@
     <button id="btnBulkEdit" class="btn primary" disabled><i data-icon="pencil"></i> 修改</button>
     <button id="btnBulkArchive" class="btn archive" disabled><i data-icon="archive"></i> 归档</button>
     <button id="btnBulkDelete" class="btn danger" disabled><i data-icon="trash"></i> 删除</button>
-  </div>
-
-  <!-- 分组栏(开启分组时显示) -->
-  <div class="group-bar" id="groupBar" hidden>
-    <div class="group-tabs" id="groupTabs"></div>
-    <button class="group-add" id="btnGroupAdd" title="分组管理">+</button>
   </div>
 
   <!-- 上半部分:列表 -->

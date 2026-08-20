@@ -103,6 +103,7 @@ pub struct Settings {
     pub show_time_precision: bool,
     pub app_icon: String,          // b | a1 | a2
     pub enable_groups: bool,
+    pub group_bar_merged: bool,    // 分组栏并入顶部卡片(否则单独成卡)
     pub font_color: String,        // default | warm1 | warm2 | warm3
     pub day_item_color_mode: String,        // theme | none | custom
     pub day_item_custom_color: String,      // clay | blue | ... (when mode=custom)
@@ -164,6 +165,7 @@ impl Default for Settings {
             show_time_precision: false,
             app_icon: "b".into(),
             enable_groups: false,
+            group_bar_merged: false,
             font_color: "warm1".into(),
             day_item_color_mode: "theme".into(),
             day_item_custom_color: "deep".into(),

@@ -1111,6 +1111,8 @@ const Main = {
     Render.showTimePrecision = s.showTimePrecision === true;
     const groupBar = document.getElementById('groupBar');
     if (groupBar) groupBar.hidden = !s.enableGroups;
+    const topbar = document.querySelector('.topbar');
+    if (topbar) topbar.classList.toggle('gb-solo', s.groupBarMerged !== true);
     this.renderGroupBar();
   },
 
@@ -2025,6 +2027,7 @@ const Main = {
         <div class="settings-group">
         <div class="settings-section-title">分组</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,可改名改色,不可删除)')}</div>
+        <div class="settings-row">${this._toggle(s.enableGroups === true && s.groupBarMerged === true, 'groupBarMerged', '分组栏合并到顶部卡片', '开启后分组栏与顶部时钟/按钮区合并为一张卡片,以横线分隔;关闭则分组栏单独成卡显示(默认独立卡片)', s.enableGroups !== true)}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤', s.enableGroups !== true)}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部', s.enableGroups !== true)}</div>
         </div>
