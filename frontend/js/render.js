@@ -583,6 +583,10 @@ const Render = {
       if (!container.contains(event.relatedTarget)) clearDropState();
     };
 
+    // 分组 tab 视图:展开状态走会话 Map(缺省折叠);全部/无分组视图:走持久化字段
+    const groupTabMode = !!Main.groupTabKey();
+    const isOpen = (node) => groupTabMode ? Main.groupIsExpanded(node.id) : node.expanded !== false;
+
     function walk(parentId, depth, path = []) {
       const kids = Render.getChildren(byParent, parentId);
       let idx = 0;
@@ -591,7 +595,7 @@ const Render = {
         idx++;
         const nodePath = [...path, idx];
         container.appendChild(makeRow(node, depth, nodePath));
-        if (node.expanded !== false) {
+        if (isOpen(node)) {
           walk(node.id, depth + 1, nodePath);
         }
       }
@@ -689,12 +693,17 @@ const Render = {
       const arrow = document.createElement('span');
       arrow.className = 'arrow' + (hasChildren ? '' : ' empty');
       if (hasChildren) {
-        arrow.innerHTML = node.expanded === false ? Icon.chevronRight() : Icon.chevronDown();
+        arrow.innerHTML = isOpen(node) ? Icon.chevronDown() : Icon.chevronRight();
         arrow.onclick = (e) => {
           e.stopPropagation();
-          const newExpanded = node.expanded === false;
-          Main.applyLocalUpdate(node.id, { expanded: newExpanded });
-          Main.sendUpdate(node.id, { expanded: newExpanded });
+          if (groupTabMode) {
+            Main.toggleGroupExpand(node.id);
+            Render.renderList(state);
+          } else {
+            const newExpanded = node.expanded === false;
+            Main.applyLocalUpdate(node.id, { expanded: newExpanded });
+            Main.sendUpdate(node.id, { expanded: newExpanded });
+          }
         };
       }
       row.appendChild(arrow);
@@ -743,9 +752,14 @@ const Render = {
       const expandMode = (settings.clickAction || 'edit') === 'expand';
       if (expandMode && hasChildren) {
         row.onclick = () => {
-          const newExpanded = node.expanded === false;
-          Main.applyLocalUpdate(node.id, { expanded: newExpanded });
-          Main.sendUpdate(node.id, { expanded: newExpanded });
+          if (groupTabMode) {
+            Main.toggleGroupExpand(node.id);
+            Render.renderList(state);
+          } else {
+            const newExpanded = node.expanded === false;
+            Main.applyLocalUpdate(node.id, { expanded: newExpanded });
+            Main.sendUpdate(node.id, { expanded: newExpanded });
+          }
         };
         row.style.cursor = 'pointer';
       } else {

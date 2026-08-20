@@ -122,6 +122,7 @@ const Main = {
     calMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
     dayViewDate: null,
     dayExpanded: null,
+    groupExpanded: new Map(), // 分组 tab 独立展开状态(会话级):tabKey -> Map<todoId,bool>
     hideDone: false,
     highlightId: null,
     settings: null,
@@ -587,6 +588,14 @@ const Main = {
     });
     this.state.bulkSelected = new Set(inView.map(t => t.id));
     this._renderBulkState();
+    // 分组 tab:自动展开走本 tab 会话 Map,不全局写库
+    if (this.groupTabKey()) {
+      const m = this._groupExpandedMap();
+      for (const t of inView) m.set(t.id, true);
+      Render.renderList(this.state);
+      this.refreshExpandButton();
+      return;
+    }
     try {
       await API.setAllExpanded(true);
       await this.reload();
@@ -1112,6 +1121,7 @@ const Main = {
     if (!t) return;
     Object.assign(t, patch);
     if (this.state.dayExpanded && 'expanded' in patch) this.state.dayExpanded.set(id, patch.expanded !== false);
+    if ('expanded' in patch) this.syncGroupExpand(id, patch.expanded);
     Render.renderAll(this.state);
   },
 
@@ -1140,17 +1150,39 @@ const Main = {
   refreshExpandButton() {
     const button = document.getElementById('btnToggleExpand');
     if (!button) return;
-    const parents = this.parentTodos();
-    const shouldCollapse = parents.some(todo => todo.expanded !== false);
+    let shouldCollapse;
+    let parentCount;
+    if (this.groupTabKey()) {
+      // 分组 tab:读该 tab 会话 Map(缺省=折叠)
+      const m = this.state.groupExpanded.get(this.groupTabKey());
+      const parents = this._groupTabParents();
+      parentCount = parents.length;
+      shouldCollapse = parents.some(t => m ? m.get(t.id) === true : false);
+    } else {
+      const parents = this.parentTodos();
+      parentCount = parents.length;
+      shouldCollapse = parents.some(todo => todo.expanded !== false);
+    }
     const label = shouldCollapse ? '折叠全部' : '展开全部';
     button.innerHTML = shouldCollapse ? Icon.chevronsUp() : Icon.chevronsDown();
     button.title = label;
     button.setAttribute('aria-label', label);
-    button.disabled = this.state.bulkExpandPending || parents.length === 0;
+    button.disabled = this.state.bulkExpandPending || parentCount === 0;
   },
 
   async toggleAllExpanded() {
     if (this.state.bulkExpandPending) return;
+    // 分组 tab:一键只改本 tab 会话 Map,不写库
+    if (this.groupTabKey()) {
+      const parents = this._groupTabParents();
+      if (parents.length === 0) return;
+      const m = this._groupExpandedMap();
+      const expanded = !parents.some(t => m.get(t.id) === true);
+      for (const t of parents) m.set(t.id, expanded);
+      Render.renderList(this.state);
+      this.refreshExpandButton();
+      return;
+    }
     const parents = this.parentTodos();
     if (parents.length === 0) return;
 
@@ -1211,6 +1243,49 @@ const Main = {
     const expand = !this.dayAnyExpanded();
     for (const id of ids) this.state.dayExpanded.set(id, expand);
     Render.renderDayView(this.state);
+  },
+
+  // ===== 分组 tab 独立展开状态(会话级,切走保留,退出即弃,不写库;缺省=折叠) =====
+  // 当前是否处于具体分组 tab(全部视图/未启用分组返回 null,走持久化 expanded 字段)
+  groupTabKey() {
+    if (!this.state.settings?.enableGroups) return null;
+    const a = this.state.activeGroup || '__all__';
+    return a === '__all__' ? null : a;
+  },
+
+  _groupExpandedMap() {
+    const key = this.groupTabKey();
+    if (!key) return null;
+    let m = this.state.groupExpanded.get(key);
+    if (!m) { m = new Map(); this.state.groupExpanded.set(key, m); }
+    return m;
+  },
+
+  groupIsExpanded(id) {
+    const key = this.groupTabKey();
+    if (!key) return undefined;
+    const m = this.state.groupExpanded.get(key);
+    return m ? m.get(id) === true : false;
+  },
+
+  toggleGroupExpand(id) {
+    const m = this._groupExpandedMap();
+    if (!m) return;
+    m.set(id, !(m.get(id) === true));
+  },
+
+  // 写库的 expanded 变更(如勾选完成自动折叠)同步进当前分组 tab 的 Map
+  syncGroupExpand(id, expanded) {
+    const m = this._groupExpandedMap();
+    if (!m) return;
+    m.set(id, expanded !== false);
+  },
+
+  // 当前分组 tab 内的父待办(一键展开/按钮状态只作用于这个范围)
+  _groupTabParents() {
+    const active = this.state.activeGroup;
+    return this.parentTodos().filter(t =>
+      active === '__default__' ? !t.groupId : t.groupId === active);
   },
 
   // targetGroupId: undefined=不变更分组;null/组id=行拖拽落点所在分组(子树跟随)
@@ -1343,6 +1418,7 @@ const Main = {
       if (did === rootId) Object.assign(patch, parentPatch);
       Object.assign(t, patch);
       if (this.state.dayExpanded && patch.expanded !== undefined) this.state.dayExpanded.set(did, patch.expanded !== false);
+      if (patch.expanded !== undefined) this.syncGroupExpand(did, patch.expanded);
     }
     Render.renderAll(this.state);
     // 2. 后端:批量递归 done
