@@ -447,6 +447,29 @@ const Render = {
       body.className = 'group-card-body';
       card.append(header, body);
       tree.appendChild(card);
+
+      // 拖到分组卡片(标题栏/空白处)= 整个子树移入该组并变顶层
+      // 分组变更是换组不是排序,不受自动模式 deadline 限制;落在具体行上时不拦截
+      const cardGroupId = key === '__default__' ? null : key;
+      card.ondragover = (event) => {
+        if (state.hideDone || event.target.closest('.node')) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        card.classList.add('drop-target');
+      };
+      card.ondragleave = (event) => {
+        if (!card.contains(event.relatedTarget)) card.classList.remove('drop-target');
+      };
+      card.ondrop = (event) => {
+        card.classList.remove('drop-target');
+        if (state.hideDone || event.target.closest('.node')) return;
+        event.preventDefault();
+        const dragId = event.dataTransfer.getData('text/plain');
+        if (!dragId || dragId.startsWith('group:')) return;
+        const dragged = state.todos.find(t => t.id === dragId);
+        if (!dragged || (dragged.groupId || null) === cardGroupId) return;
+        Main.moveToGroup(dragId, cardGroupId);
+      };
       if (todos.length) {
         this._renderTodosIntoContainer(state, body, todos);
         if (!body.children.length) {
@@ -643,7 +666,7 @@ const Render = {
         const movingId = dragId;
         dragId = null;
         blockedDropIds.clear();
-        Main.moveTodo(movingId, placement.parentId, placement.index);
+        Main.moveTodo(movingId, placement.parentId, placement.index, node.groupId || null);
       };
 
       const arrow = document.createElement('span');

@@ -754,6 +754,7 @@ const Main = {
       tabs.push(`<div class="group-tab ${active === g.id ? 'active' : ''}" data-id="${g.id}" title="${g.name}">${g.name}<span class="group-tab-menu" data-id="${g.id}">⋯</span></div>`);
     }
     bar.innerHTML = tabs.join('');
+    let dragTabId = null;
     bar.querySelectorAll('.group-tab').forEach((el) => {
       el.addEventListener('click', (e) => {
         if (e.target.classList.contains('group-tab-menu')) return;
@@ -761,6 +762,38 @@ const Main = {
         this.renderGroupBar();
         Render.renderList(this.state);
       });
+      // 具体分组 tab 可拖拽排序(全部/Default 固定)
+      const tabId = el.dataset.id;
+      if (tabId !== '__all__' && tabId !== '__default__') {
+        el.draggable = true;
+        el.ondragstart = (e) => {
+          dragTabId = tabId;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', 'group:' + tabId);
+        };
+        el.ondragend = () => {
+          dragTabId = null;
+          el.classList.remove('drop-hint');
+        };
+        el.ondragover = (e) => {
+          if (!dragTabId || dragTabId === tabId) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          el.classList.add('drop-hint');
+        };
+        el.ondragleave = () => el.classList.remove('drop-hint');
+        el.ondrop = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.classList.remove('drop-hint');
+          const raw = dragTabId || e.dataTransfer.getData('text/plain').replace(/^group:/, '');
+          dragTabId = null;
+          if (!raw || raw === tabId) return;
+          const rect = el.getBoundingClientRect();
+          const after = (e.clientX - rect.left) > rect.width / 2;
+          this.reorderGroups(raw, tabId, after);
+        };
+      }
     });
     bar.querySelectorAll('.group-tab-menu').forEach((el) => {
       el.addEventListener('click', (e) => {
@@ -953,10 +986,19 @@ const Main = {
     Render.renderDayView(this.state);
   },
 
-  async moveTodo(id, parentId, index) {
+  // targetGroupId: undefined=不变更分组;null/组id=行拖拽落点所在分组(子树跟随)
+  async moveTodo(id, parentId, index, targetGroupId) {
     const before = JSON.parse(JSON.stringify(this.state.todos));
     const moving = this.state.todos.find(t => t.id === id);
     if (!moving) return;
+
+    const groupChanged = targetGroupId !== undefined && (moving.groupId || null) !== targetGroupId;
+    if (groupChanged) {
+      this.collectDescendants(id).forEach((did) => {
+        const t = this.state.todos.find(x => x.id === did);
+        if (t) t.groupId = targetGroupId;
+      });
+    }
 
     const oldParentId = moving.parentId || null;
     const sortedSiblings = (targetParentId) => this.state.todos
@@ -979,6 +1021,7 @@ const Main = {
     Render.renderAll(this.state);
 
     try {
+      if (groupChanged) await API.setTodoGroup(id, targetGroupId);
       const data = await API.moveTodo(id, parentId, index);
       this.state.todos = data.todos || [];
       Render.renderAll(this.state);
@@ -992,6 +1035,53 @@ const Main = {
         hideCancel: true,
         danger: true,
       });
+    }
+  },
+
+  // 拖到分组卡片:整个子树换组并成为该组顶层(追加末尾)
+  async moveToGroup(id, groupId) {
+    const before = JSON.parse(JSON.stringify(this.state.todos));
+    const moving = this.state.todos.find(t => t.id === id);
+    if (!moving || (moving.groupId || null) === groupId) return;
+
+    this.collectDescendants(id).forEach((did) => {
+      const t = this.state.todos.find(x => x.id === did);
+      if (t) t.groupId = groupId;
+    });
+    moving.parentId = null;
+    const maxTopOrder = this.state.todos
+      .filter(t => !t.parentId)
+      .reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+    moving.order = maxTopOrder + 1;
+    Render.renderAll(this.state);
+
+    try {
+      const data = await API.moveToGroup(id, groupId);
+      this.state.todos = data.todos || [];
+      Render.renderAll(this.state);
+    } catch (e) {
+      this.state.todos = before;
+      Render.renderAll(this.state);
+      alert('移动分组失败:' + window.__tauriErrMsg(e));
+    }
+  },
+
+  async reorderGroups(dragId, targetId, insertAfter) {
+    const groups = [...(this.state.groups || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    const from = groups.findIndex(g => g.id === dragId);
+    if (from < 0 || dragId === targetId) return;
+    const [moved] = groups.splice(from, 1);
+    let insertAt = groups.findIndex(g => g.id === targetId);
+    if (insertAt < 0) return;
+    if (insertAfter) insertAt += 1;
+    groups.splice(insertAt, 0, moved);
+    groups.forEach((g, i) => { g.order = i + 1; });
+    this.renderGroupBar();
+    try {
+      await API.reorderGroups(groups.map(g => g.id));
+    } catch (e) {
+      alert('分组排序失败:' + window.__tauriErrMsg(e));
+      await this.reload();
     }
   },
 
@@ -2219,6 +2309,7 @@ const Main = {
     // 弹窗
     document.getElementById('btnCancel').onclick = () => this.closeModal();
     document.getElementById('btnSave').onclick = () => this.saveModal();
+    document.getElementById('fParent').addEventListener('change', () => this._syncGroupSelectToParent());
     document.getElementById('btnDelete').onclick = () => this.deleteCurrent();
     document.getElementById('btnArchive').onclick = () => this.archiveCurrent();
     document.getElementById('btnNotes').onclick = () => this.toggleNotesAside();
@@ -2537,6 +2628,40 @@ const Main = {
     walk(null, 0);
   },
 
+  _populateGroupSelect(sel, selected = '') {
+    if (!sel) return;
+    const groups = [...(this.state.groups || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
+    sel.innerHTML = '<option value="">Default</option>'
+      + groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
+    sel.value = (selected && groups.some(g => g.id === selected)) ? selected : '';
+  },
+
+  // 新建默认分组:当前在具体分组 tab → 该分组;全部/Default → Default
+  _defaultGroupIdForCreate() {
+    const a = this.state.activeGroup;
+    return (a && a !== '__all__' && a !== '__default__'
+      && (this.state.groups || []).some(g => g.id === a)) ? a : '';
+  },
+
+  // 父级选择联动:挂到父待办下时分组跟随父(禁止改),顶层时可自由选择
+  _syncGroupSelectToParent() {
+    const row = document.getElementById('fldGroupRow');
+    const sel = document.getElementById('fGroup');
+    if (!row || row.hidden || !sel) return;
+    const pid = document.getElementById('fParent').value || null;
+    if (pid) {
+      const parent = this.state.todos.find(t => t.id === pid);
+      const gid = parent && parent.groupId
+        && (this.state.groups || []).some(g => g.id === parent.groupId) ? parent.groupId : '';
+      sel.value = gid;
+      sel.disabled = true;
+      sel.title = '子待办跟随父待办的分组';
+    } else {
+      sel.disabled = false;
+      sel.title = '';
+    }
+  },
+
   // 根据 settings.defaultStartTime 预填 startTime
   _defaultStartTime() {
     const s = this.state.settings;
@@ -2568,6 +2693,14 @@ const Main = {
     if (endBadge) endBadge.hidden = true;
     this.refreshParentSelect(null);
     if (opts.parentId) document.getElementById('fParent').value = opts.parentId;
+    const groupRow = document.getElementById('fldGroupRow');
+    if (this.state.settings?.enableGroups) {
+      groupRow.hidden = false;
+      this._populateGroupSelect(document.getElementById('fGroup'), opts.groupId ?? this._defaultGroupIdForCreate());
+    } else {
+      groupRow.hidden = true;
+    }
+    this._syncGroupSelectToParent();
     const start = opts.startTime
       || (opts.parentId ? this._inheritedStartTime(opts.parentId) : null)
       || this._defaultStartTime();
@@ -2802,6 +2935,13 @@ const Main = {
     this._renderDateDisplay('fTreeStart');
     endInput.value = '';
     this._renderDateDisplay('fTreeEnd');
+    const treeGroupRow = document.getElementById('treeGroupRow');
+    if (treeGroupRow) {
+      treeGroupRow.hidden = !this.state.settings?.enableGroups;
+      if (!treeGroupRow.hidden) {
+        this._populateGroupSelect(document.getElementById('fTreeGroup'), this._defaultGroupIdForCreate());
+      }
+    }
     this._refreshTreeCount();
     setTimeout(() => document.getElementById('fTreeTitles').focus(), 50);
   },
@@ -2870,6 +3010,10 @@ const Main = {
     btn.disabled = true;
     btn.textContent = '创建中...';
     try {
+      const treeGroupRow = document.getElementById('treeGroupRow');
+      const rootGroupId = (treeGroupRow && !treeGroupRow.hidden)
+        ? (document.getElementById('fTreeGroup').value || null)
+        : null;
       const stack = [];
       const rootIds = [];
       for (const item of parsed) {
@@ -2880,6 +3024,7 @@ const Main = {
           startTime,
           endTime,
           parentId,
+          groupId: parentId ? null : rootGroupId,
         });
         if (!parentId) rootIds.push(created.id);
         stack.push(created.id);
@@ -2988,6 +3133,14 @@ const Main = {
     }
     this.refreshParentSelect(id);
     if (t.parentId) document.getElementById('fParent').value = t.parentId;
+    const groupRow = document.getElementById('fldGroupRow');
+    if (this.state.settings?.enableGroups) {
+      groupRow.hidden = false;
+      this._populateGroupSelect(document.getElementById('fGroup'), t.groupId || '');
+    } else {
+      groupRow.hidden = true;
+    }
+    this._syncGroupSelectToParent();
     document.getElementById('fSuspended').checked = !!t.suspendedAt;
     document.getElementById('fPriority').checked = !!t.isPriority;
     document.querySelector('.fld-flags').hidden = false;
@@ -3149,6 +3302,12 @@ const Main = {
     const notesRaw = this._notesEditor ? this._notesEditor.getValue() : (this._pendingNotesValue || '');
     body.notes = notesRaw && notesRaw.trim() ? notesRaw : null;
 
+    const groupRow = document.getElementById('fldGroupRow');
+    const groupVisible = groupRow && !groupRow.hidden;
+    if (!this.editingId && groupVisible) {
+      body.groupId = document.getElementById('fGroup').value || null;
+    }
+
     try {
       if (this.editingId) await API.update(this.editingId, body);
       else await API.create(body);
@@ -3161,6 +3320,15 @@ const Main = {
         }
         if (cur && !!cur.isPriority !== wantPriority) {
           await window.__TAURI__.core.invoke('set_priority', { id: this.editingId, priority: wantPriority });
+        }
+        // 分组同步:有父级→跟随父;顶层→按下拉选择(整个子树跟随)
+        if (groupVisible) {
+          const newGroup = parentId
+            ? ((this.state.todos.find(x => x.id === parentId) || {}).groupId || null)
+            : (document.getElementById('fGroup').value || null);
+          if (cur && (cur.groupId || null) !== newGroup) {
+            await API.setTodoGroup(this.editingId, newGroup);
+          }
         }
       }
       this.closeModal();

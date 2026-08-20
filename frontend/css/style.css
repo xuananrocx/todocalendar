@@ -1204,6 +1204,8 @@ body.bulk-mode .drag-handle { display: none; }
 }
 .group-tab:hover { background: var(--hover-bg); color: var(--text); }
 .group-tab.active { background: var(--primary-bg); color: var(--primary); font-weight: 600; }
+.group-tab.drop-hint { outline: 2px dashed var(--primary); outline-offset: -2px; }
+.group-tab[draggable='true'] { -webkit-user-drag: element; }
 .group-tab-menu {
   font-size: 14px;
   line-height: 1;
@@ -1258,6 +1260,7 @@ body.bulk-mode .drag-handle { display: none; }
   text-align: center;
 }
 .group-card.empty { opacity: .7; }
+.group-card.drop-target { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-bg); }
 
 /* 设置页 color picker (主题色) */
 .color-picker {

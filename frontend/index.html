@@ -310,6 +310,9 @@
         <label class="fld-parent">父级
           <select id="fParent"><option value="">(顶层)</option></select>
         </label>
+        <label class="fld-group" id="fldGroupRow" hidden>分组
+          <select id="fGroup"><option value="">Default</option></select>
+        </label>
         <div class="fld-flags">
           <label class="flag-toggle" title="搁置待办(含父子节点)">
             <input type="checkbox" id="fSuspended">
@@ -397,6 +400,9 @@
         </div>
         <button type="button" id="btnTreeEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
       </div>
+    </label>
+    <label class="fld-group" id="treeGroupRow" hidden>分组
+      <select id="fTreeGroup"><option value="">Default</option></select>
     </label>
     <div class="bulk-count" id="treeCount">将创建 0 个待办 · 0 棵树</div>
     <div class="modal-actions">

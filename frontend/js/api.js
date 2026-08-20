@@ -14,8 +14,8 @@ const API = {
     return await invoke('list_todos');
   },
   async create(body) {
-    const { title, parentId, startTime, endTime, notes } = body;
-    return await invoke('create_todo', { title, parentId, startTime, endTime, notes: notes ?? null });
+    const { title, parentId, startTime, endTime, notes, groupId } = body;
+    return await invoke('create_todo', { title, parentId, startTime, endTime, notes: notes ?? null, groupId: groupId ?? null });
   },
   async update(id, body) {
     return await invoke('update_todo', { id, patch: body });
@@ -73,6 +73,7 @@ const API = {
   async deleteGroup(id) { return await invoke('delete_group', { id }); },
   async reorderGroups(ids) { return await invoke('reorder_groups', { ids }); },
   async setTodoGroup(id, groupId) { return await invoke('set_todo_group', { id, groupId }); },
+  async moveToGroup(id, groupId) { return await invoke('move_todo_to_group', { id, groupId }); },
 
   // ===== Data =====
   async listAll() {

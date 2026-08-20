@@ -904,6 +904,7 @@ fn create_todo(
     start_time: Option<String>,
     end_time: Option<String>,
     notes: Option<String>,
+    group_id: Option<String>,
 ) -> Todo {
     let file = data_file(&app);
     let mut data = load_data(&file);
@@ -930,10 +931,15 @@ fn create_todo(
         title
     };
 
-    // 子代办继承父的 group_id
-    let group_id = parent_id
-        .as_ref()
-        .and_then(|pid| data.todos.iter().find(|t| t.id == *pid).and_then(|p| p.group_id.clone()));
+    // 子代办继承父的 group_id(父在 Default 组也是权威);顶层待办用显式传入的分组
+    let group_id = match &parent_id {
+        Some(pid) => data
+            .todos
+            .iter()
+            .find(|t| t.id == *pid)
+            .and_then(|p| p.group_id.clone()),
+        None => group_id,
+    };
 
     let new = Todo {
         id: Uuid::new_v4().to_string()[..12].into(),
@@ -1616,6 +1622,52 @@ fn set_todo_group(app: tauri::AppHandle, id: String, group_id: Option<String>) -
     Ok(())
 }
 
+/// 移入分组:整个子树换组 + 变为该组顶层(追加到末尾)
+#[tauri::command]
+fn move_todo_to_group(
+    app: tauri::AppHandle,
+    id: String,
+    group_id: Option<String>,
+) -> Result<Data, String> {
+    let file = data_file(&app);
+    let mut data = load_data(&file);
+    let moving = data
+        .todos
+        .iter()
+        .find(|t| t.id == id)
+        .ok_or_else(|| "待办不存在".to_string())?;
+    let old_parent_id = moving.parent_id.clone();
+
+    let subtree = collect_descendants(&data.todos, &id);
+    for t in data.todos.iter_mut() {
+        if subtree.contains(&t.id) {
+            t.group_id = group_id.clone();
+        }
+    }
+
+    let max_top_order = data
+        .todos
+        .iter()
+        .filter(|t| t.parent_id.is_none())
+        .map(|t| t.order)
+        .max()
+        .unwrap_or(-1);
+    if let Some(t) = data.todos.iter_mut().find(|t| t.id == id) {
+        t.parent_id = None;
+        t.order = max_top_order + 1;
+    }
+
+    if let Some(old_pid) = old_parent_id {
+        let settings = load_settings(&settings_file(&app));
+        sync_parent_time(&mut data, &settings, old_pid);
+    }
+
+    save_data_checked(&file, &data)?;
+    let mut result = data.clone();
+    result.todos.retain(|t| t.archived_at.is_none());
+    Ok(result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     #[cfg(target_os = "windows")]
@@ -1655,6 +1707,7 @@ pub fn run() {
             delete_group,
             reorder_groups,
             set_todo_group,
+            move_todo_to_group,
             list_holidays,
             check_holiday_updates,
         ])
