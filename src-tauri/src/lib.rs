@@ -51,6 +51,8 @@ pub struct Group {
     pub id: String,
     pub name: String,
     pub order: i64,
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -1537,7 +1539,7 @@ fn list_groups(app: tauri::AppHandle) -> Vec<Group> {
 }
 
 #[tauri::command]
-fn create_group(app: tauri::AppHandle, name: String) -> Result<Group, String> {
+fn create_group(app: tauri::AppHandle, name: String, color: Option<String>) -> Result<Group, String> {
     let file = data_file(&app);
     let mut data = load_data(&file);
     let trimmed = name.trim();
@@ -1549,10 +1551,25 @@ fn create_group(app: tauri::AppHandle, name: String) -> Result<Group, String> {
         id: Uuid::new_v4().to_string()[..12].into(),
         name: trimmed.into(),
         order: max_order + 1,
+        color: color.filter(|c| !c.trim().is_empty()),
     };
     data.groups.push(group.clone());
     save_data_checked(&file, &data)?;
     Ok(group)
+}
+
+#[tauri::command]
+fn set_group_color(app: tauri::AppHandle, id: String, color: Option<String>) -> Result<(), String> {
+    let file = data_file(&app);
+    let mut data = load_data(&file);
+    for g in data.groups.iter_mut() {
+        if g.id == id {
+            g.color = color.filter(|c| !c.trim().is_empty());
+            save_data_checked(&file, &data)?;
+            return Ok(());
+        }
+    }
+    Err("分组不存在".into())
 }
 
 #[tauri::command]
@@ -1712,6 +1729,7 @@ pub fn run() {
             reorder_groups,
             set_todo_group,
             move_todo_to_group,
+            set_group_color,
             list_holidays,
             check_holiday_updates,
         ])

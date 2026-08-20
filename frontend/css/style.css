@@ -1232,7 +1232,7 @@ body.bulk-mode .drag-handle { display: none; }
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 15px;
   overflow: hidden;
 }
 .group-card-header {
@@ -1261,6 +1261,36 @@ body.bulk-mode .drag-handle { display: none; }
 }
 .group-card.empty { opacity: .7; }
 .group-card.drop-target { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-bg); }
+.group-card.colored { border-width: 0.8px; border-color: var(--group-color); }
+.group-card.colored .group-card-header {
+  background: color-mix(in srgb, var(--group-color) 12%, var(--panel));
+  border-bottom-color: color-mix(in srgb, var(--group-color) 28%, var(--panel));
+}
+
+/* 分组颜色选择器 */
+.group-color-picker { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+#groupMask .modal-actions { margin-top: 9px; }
+.gc-swatch {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  position: relative;
+}
+.gc-swatch:hover { transform: scale(1.12); }
+.gc-swatch.selected { outline: 2px solid var(--text); outline-offset: 2px; }
+.gc-swatch-none {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  border: 1.5px dashed var(--muted);
+  background: transparent;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 11px; line-height: 1;
+}
+.gc-swatch-none:hover { transform: scale(1.12); }
+.gc-swatch-none.selected { outline: 2px solid var(--text); outline-offset: 2px; border-style: solid; }
 
 /* 设置页 color picker (主题色) */
 .color-picker {

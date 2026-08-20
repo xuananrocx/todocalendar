@@ -68,7 +68,8 @@ const API = {
 
   // ===== Groups =====
   async listGroups() { return await invoke('list_groups'); },
-  async createGroup(name) { return await invoke('create_group', { name }); },
+  async createGroup(name, color) { return await invoke('create_group', { name, color: color ?? null }); },
+  async setGroupColor(id, color) { return await invoke('set_group_color', { id, color: color ?? null }); },
   async renameGroup(id, name) { return await invoke('rename_group', { id, name }); },
   async deleteGroup(id) { return await invoke('delete_group', { id }); },
   async reorderGroups(ids) { return await invoke('reorder_groups', { ids }); },

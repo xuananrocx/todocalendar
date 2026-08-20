@@ -444,11 +444,12 @@ const Render = {
       return;
     }
 
-    const renderOneGroup = (key, name) => {
+    const renderOneGroup = (key, name, color) => {
       const todos = filterTodos(key);
       const card = document.createElement('div');
       card.className = 'group-card';
       if (!todos.length) card.classList.add('empty');
+      if (color) { card.style.setProperty('--group-color', color); card.classList.add('colored'); }
       const header = document.createElement('div');
       header.className = 'group-card-header';
       const titleEl = document.createElement('span');
@@ -503,7 +504,7 @@ const Render = {
     };
 
     renderOneGroup('__default__', 'Default');
-    for (const g of groups) renderOneGroup(g.id, g.name);
+    for (const g of groups) renderOneGroup(g.id, g.name, g.color || null);
     if (!tree.children.length) {
       const empty = document.createElement('div');
       empty.className = 'tree-empty';

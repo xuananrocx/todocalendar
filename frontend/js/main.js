@@ -914,58 +914,98 @@ const Main = {
     bar.querySelectorAll('.group-tab-menu').forEach((el) => {
       el.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.openGroupMenu(el.dataset.id);
+        this.openGroupEdit(el.dataset.id);
       });
     });
   },
 
-  async openGroupMenu(id) {
+  _GROUP_COLORS: ['#D97757', '#3B82F6', '#06B6D4', '#10B981', '#F97316', '#EF4444', '#14B8A6', '#6B7280'],
+
+  _renderGroupColorPicker() {
+    const box = document.getElementById('groupColorPicker');
+    box.innerHTML = '';
+    const mk = (color) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'gc-swatch' + (color ? '' : ' gc-swatch-none');
+      b.title = color || '无色';
+      if (color) b.style.background = color;
+      if ((this._pendingGroupColor || null) === color) b.classList.add('selected');
+      b.onclick = () => {
+        this._pendingGroupColor = color;
+        this._renderGroupColorPicker();
+      };
+      box.appendChild(b);
+    };
+    mk(null);
+    for (const c of this._GROUP_COLORS) mk(c);
+  },
+
+  openGroupEdit(id) {
     const group = (this.state.groups || []).find(g => g.id === id);
     if (!group) return;
-    const result = await this.promptAction({
-      title: '编辑分组',
-      value: group.name,
-      confirmText: '保存',
-      showDelete: true,
-      deleteText: '删除分组',
-    });
-    if (result.type === 'cancel') return;
-    if (result.type === 'delete') {
-      const confirmed = await this.confirmAction({
-        title: '删除分组',
-        message: `确定删除分组 "${group.name}"?组内待办将移到 Default。`,
-        confirmText: '删除',
-        danger: true,
-      });
-      if (!confirmed) return;
-      try {
-        await API.deleteGroup(id);
-        if (this.state.activeGroup === id) this.state.activeGroup = '__all__';
-        await this.reload();
-      } catch (e) { alert('删除分组失败:' + window.__tauriErrMsg(e)); }
-      return;
-    }
-    const name = (result.value || '').trim();
-    if (!name || name === group.name) return;
-    try {
-      await API.renameGroup(id, name);
-      await this.reload();
-    } catch (e) { alert('重命名失败:' + window.__tauriErrMsg(e)); }
+    this._editingGroupId = id;
+    document.getElementById('groupModalTitle').textContent = '编辑分组';
+    document.getElementById('fGroupEditName').value = group.name;
+    document.getElementById('btnGroupDelete').hidden = false;
+    this._pendingGroupColor = group.color || null;
+    this._renderGroupColorPicker();
+    document.getElementById('groupMask').hidden = false;
+    document.getElementById('fGroupEditName').focus();
   },
 
-  async openGroupCreate() {
-    const result = await this.promptAction({
-      title: '新建分组',
-      placeholder: '输入分组名称',
-      confirmText: '创建',
-    });
-    const name = (result.value || '').trim();
-    if (result.type !== 'submit' || !name) return;
+  openGroupCreate() {
+    this._editingGroupId = null;
+    document.getElementById('groupModalTitle').textContent = '新建分组';
+    document.getElementById('fGroupEditName').value = '';
+    document.getElementById('btnGroupDelete').hidden = true;
+    this._pendingGroupColor = null;
+    this._renderGroupColorPicker();
+    document.getElementById('groupMask').hidden = false;
+    document.getElementById('fGroupEditName').focus();
+  },
+
+  closeGroupModal() {
+    document.getElementById('groupMask').hidden = true;
+    this._editingGroupId = null;
+  },
+
+  async saveGroupModal() {
+    const id = this._editingGroupId;
+    const name = document.getElementById('fGroupEditName').value.trim();
+    const color = this._pendingGroupColor || null;
+    if (!name) { alert('请输入分组名称'); return; }
     try {
-      await API.createGroup(name);
-      this.state.activeGroup = '__all__';
+      if (!id) {
+        await API.createGroup(name, color);
+        this.state.activeGroup = '__all__';
+      } else {
+        const group = (this.state.groups || []).find(g => g.id === id);
+        if (name !== group.name) await API.renameGroup(id, name);
+        if ((group.color || null) !== color) await API.setGroupColor(id, color);
+      }
+      this.closeGroupModal();
       await this.reload();
-    } catch (e) { alert('新建分组失败:' + window.__tauriErrMsg(e)); }
+    } catch (e) { alert('保存分组失败:' + window.__tauriErrMsg(e)); }
+  },
+
+  async deleteGroupFromModal() {
+    const id = this._editingGroupId;
+    const group = (this.state.groups || []).find(g => g.id === id);
+    if (!group) return;
+    const confirmed = await this.confirmAction({
+      title: '删除分组',
+      message: `确定删除分组 "${group.name}"?组内待办将移到 Default。`,
+      confirmText: '删除',
+      danger: true,
+    });
+    if (!confirmed) return;
+    try {
+      await API.deleteGroup(id);
+      if (this.state.activeGroup === id) this.state.activeGroup = '__all__';
+      this.closeGroupModal();
+      await this.reload();
+    } catch (e) { alert('删除分组失败:' + window.__tauriErrMsg(e)); }
   },
 
   applySettingsToDom() {
@@ -2500,6 +2540,16 @@ const Main = {
     document.getElementById('btnTreeCancel').onclick = () => this.closeBulkTreeModal();
     document.getElementById('btnTreeSave').onclick = () => this.saveBulkTreeModal();
     this._attachMaskClose('bulkTreeMask', () => this.closeBulkTreeModal());
+
+    // 分组编辑弹窗
+    document.getElementById('btnGroupCancel').onclick = () => this.closeGroupModal();
+    document.getElementById('btnGroupSave').onclick = () => this.saveGroupModal();
+    document.getElementById('btnGroupDelete').onclick = () => this.deleteGroupFromModal();
+    const fGroupEditName = document.getElementById('fGroupEditName');
+    fGroupEditName.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); this.saveGroupModal(); }
+    });
+    this._attachMaskClose('groupMask', () => this.closeGroupModal());
     const fTreeTitles = document.getElementById('fTreeTitles');
     if (fTreeTitles) {
       fTreeTitles.oninput = () => this._refreshTreeCount();

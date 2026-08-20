@@ -377,6 +377,24 @@
   </div>
 </div>
 
+<div class="modal-mask" id="groupMask" hidden>
+  <div class="modal" style="width:340px">
+    <h3 id="groupModalTitle">编辑分组</h3>
+    <label>名称
+      <input type="text" id="fGroupEditName" placeholder="输入分组名称" maxlength="20" autocomplete="off">
+    </label>
+    <label>卡片颜色
+      <div class="group-color-picker" id="groupColorPicker"></div>
+    </label>
+    <div class="modal-actions">
+      <button id="btnGroupDelete" class="btn danger" hidden>删除分组</button>
+      <span class="spacer"></span>
+      <button id="btnGroupCancel" class="btn ghost">取消</button>
+      <button id="btnGroupSave" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="bulkTreeMask" hidden>
   <div class="modal">
     <h3>批量新建待办树</h3>
