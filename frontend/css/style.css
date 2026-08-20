@@ -1481,6 +1481,41 @@ body.bulk-mode .drag-handle { display: none; }
 .modal input:focus, .modal select:focus, .modal textarea:focus {
   outline: none; border-color: var(--primary);
 }
+
+/* 自定义下拉框(弹窗内替代原生 select) */
+.cs-select { position: relative; }
+.cs-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; padding: 6px 8px;
+  border: 1px solid var(--border); border-radius: 6px;
+  background: var(--panel); color: var(--text);
+  font-size: 13px; font-family: inherit; text-align: left;
+  cursor: pointer;
+}
+.cs-toggle:hover:not(:disabled) { border-color: var(--primary); }
+.cs-toggle:focus { outline: none; border-color: var(--primary); }
+.cs-toggle:disabled { opacity: .55; cursor: not-allowed; }
+.cs-label {
+  flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cs-chevron { display: inline-flex; align-items: center; color: var(--muted); flex-shrink: 0; }
+.cs-chevron .svg-icon { width: 14px; height: 14px; transition: transform .12s; }
+.cs-select.cs-open .cs-chevron .svg-icon { transform: rotate(180deg); }
+.cs-menu {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 60;
+  max-height: 240px; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.1);
+  padding: 4px;
+}
+.cs-menu .dropdown-item { justify-content: space-between; }
+.cs-option .cs-option-label {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cs-option.active { color: var(--primary); font-weight: 600; }
+.cs-option .cs-check { display: inline-flex; align-items: center; color: var(--primary); }
+.cs-option .cs-check .svg-icon { width: 13px; height: 13px; }
 .time-row { display: flex; gap: 6px; align-items: center; }
 .input-wrap { position: relative; flex: 1; min-width: 0; }
 .input-wrap input { width: 100%; }

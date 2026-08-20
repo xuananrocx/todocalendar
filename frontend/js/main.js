@@ -1,3 +1,119 @@
+// 自定义下拉框:替代弹窗里系统默认的 <select>(父级/分组)
+// items: [{value, label, depth}] ;value 为 '' 表示"无/顶层"
+class CustomSelect {
+  constructor(rootEl, { onchange = null } = {}) {
+    this.root = rootEl;
+    this.onchange = onchange;
+    this.items = [];
+    this.value = '';
+    this.disabled = false;
+    this.title = '';
+    rootEl.classList.add('cs-select');
+    rootEl.innerHTML = `
+      <button type="button" class="cs-toggle">
+        <span class="cs-label"></span>
+        <span class="cs-chevron"></span>
+      </button>
+      <div class="cs-menu" hidden></div>`;
+    this.toggleBtn = rootEl.querySelector('.cs-toggle');
+    this.labelEl = rootEl.querySelector('.cs-label');
+    this.chevronEl = rootEl.querySelector('.cs-chevron');
+    this.menuEl = rootEl.querySelector('.cs-menu');
+    this.chevronEl.innerHTML = Icon.chevronDown();
+    this.toggleBtn.onclick = () => {
+      if (this.disabled) return;
+      this.menuEl.hidden ? this.open() : this.close();
+    };
+    document.addEventListener('click', (e) => {
+      if (!this.root.contains(e.target)) this.close();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !this.menuEl.hidden) {
+        e.stopPropagation();
+        this.close();
+      }
+    }, true);
+  }
+
+  _labelOf(value) {
+    const item = this.items.find(i => i.value === value);
+    return item ? item.label : (this.items[0] ? this.items[0].label : '');
+  }
+
+  _renderToggle() {
+    this.labelEl.textContent = this._labelOf(this.value);
+    this.toggleBtn.disabled = this.disabled;
+    this.toggleBtn.title = this.disabled ? this.title : '';
+    this.root.classList.toggle('cs-disabled', this.disabled);
+  }
+
+  _renderMenu() {
+    this.menuEl.innerHTML = '';
+    for (const item of this.items) {
+      const el = document.createElement('div');
+      el.className = 'dropdown-item cs-option' + (item.value === this.value ? ' active' : '');
+      el.style.paddingLeft = (10 + (item.depth || 0) * 14) + 'px';
+      const label = document.createElement('span');
+      label.className = 'cs-option-label';
+      label.textContent = item.label;
+      el.appendChild(label);
+      if (item.value === this.value) {
+        const check = document.createElement('span');
+        check.className = 'cs-check';
+        check.innerHTML = Icon.check();
+        el.appendChild(check);
+      }
+      el.onclick = () => {
+        this.value = item.value;
+        this.close();
+        this._renderToggle();
+        this._renderMenu();
+        if (this.onchange) this.onchange(this.value);
+      };
+      this.menuEl.appendChild(el);
+    }
+  }
+
+  // 重设选项(选中值重置为 selected 或第一项),不触发 onchange
+  setOptions(items, selected) {
+    this.items = items || [];
+    const valid = selected !== undefined && this.items.some(i => i.value === selected);
+    this.value = valid ? selected : (this.items[0] ? this.items[0].value : '');
+    this._renderToggle();
+    this._renderMenu();
+    this.close();
+  }
+
+  // 程序赋值(不触发 onchange,同原生 select.value)
+  setValue(value) {
+    this.value = value;
+    this._renderToggle();
+    this._renderMenu();
+  }
+
+  getValue() { return this.value; }
+
+  setDisabled(disabled, title = '') {
+    this.disabled = disabled;
+    this.title = title;
+    if (disabled) this.close();
+    this._renderToggle();
+  }
+
+  open() {
+    this._renderMenu();
+    this.menuEl.hidden = false;
+    this.root.classList.add('cs-open');
+    const activeEl = this.menuEl.querySelector('.cs-option.active');
+    if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+  }
+
+  close() {
+    this.menuEl.hidden = true;
+    this.root.classList.remove('cs-open');
+  }
+}
+
 const Main = {
   state: {
     todos: [],
@@ -2309,7 +2425,11 @@ const Main = {
     // 弹窗
     document.getElementById('btnCancel').onclick = () => this.closeModal();
     document.getElementById('btnSave').onclick = () => this.saveModal();
-    document.getElementById('fParent').addEventListener('change', () => this._syncGroupSelectToParent());
+    this.parentSelect = new CustomSelect(document.getElementById('fParent'), {
+      onchange: () => this._syncGroupSelectToParent(),
+    });
+    this.groupSelect = new CustomSelect(document.getElementById('fGroup'));
+    this.treeGroupSelect = new CustomSelect(document.getElementById('fTreeGroup'));
     document.getElementById('btnDelete').onclick = () => this.deleteCurrent();
     document.getElementById('btnArchive').onclick = () => this.archiveCurrent();
     document.getElementById('btnNotes').onclick = () => this.toggleNotesAside();
@@ -2609,31 +2729,26 @@ const Main = {
   },
 
   refreshParentSelect(excludeId) {
-    const sel = document.getElementById('fParent');
-    sel.innerHTML = '<option value="">(顶层)</option>';
+    const items = [{ value: '', label: '(顶层)', depth: 0 }];
     const byParent = Render.buildTree(this.state.todos);
-
-    const indentStr = (depth) => '— '.repeat(depth);
     const walk = (parentId, depth) => {
       const kids = Render.getChildren(byParent, parentId);
       for (const k of kids) {
         if (k.id === excludeId) continue;
-        const opt = document.createElement('option');
-        opt.value = k.id;
-        opt.textContent = indentStr(depth) + k.title;
-        sel.appendChild(opt);
+        items.push({ value: k.id, label: k.title, depth });
         walk(k.id, depth + 1);
       }
     };
     walk(null, 0);
+    this.parentSelect.setOptions(items);
   },
 
-  _populateGroupSelect(sel, selected = '') {
-    if (!sel) return;
+  _populateGroupSelect(cs, selected = '') {
+    if (!cs) return;
     const groups = [...(this.state.groups || [])].sort((a, b) => (a.order || 0) - (b.order || 0));
-    sel.innerHTML = '<option value="">Default</option>'
-      + groups.map(g => `<option value="${g.id}">${g.name}</option>`).join('');
-    sel.value = (selected && groups.some(g => g.id === selected)) ? selected : '';
+    const items = [{ value: '', label: 'Default', depth: 0 }]
+      .concat(groups.map(g => ({ value: g.id, label: g.name, depth: 0 })));
+    cs.setOptions(items, selected);
   },
 
   // 新建默认分组:当前在具体分组 tab → 该分组;全部/Default → Default
@@ -2646,19 +2761,16 @@ const Main = {
   // 父级选择联动:挂到父待办下时分组跟随父(禁止改),顶层时可自由选择
   _syncGroupSelectToParent() {
     const row = document.getElementById('fldGroupRow');
-    const sel = document.getElementById('fGroup');
-    if (!row || row.hidden || !sel) return;
-    const pid = document.getElementById('fParent').value || null;
+    if (!row || row.hidden || !this.groupSelect || !this.parentSelect) return;
+    const pid = this.parentSelect.getValue() || null;
     if (pid) {
       const parent = this.state.todos.find(t => t.id === pid);
       const gid = parent && parent.groupId
         && (this.state.groups || []).some(g => g.id === parent.groupId) ? parent.groupId : '';
-      sel.value = gid;
-      sel.disabled = true;
-      sel.title = '子待办跟随父待办的分组';
+      this.groupSelect.setValue(gid);
+      this.groupSelect.setDisabled(true, '子待办跟随父待办的分组');
     } else {
-      sel.disabled = false;
-      sel.title = '';
+      this.groupSelect.setDisabled(false);
     }
   },
 
@@ -2692,11 +2804,11 @@ const Main = {
     if (startBadge) startBadge.hidden = true;
     if (endBadge) endBadge.hidden = true;
     this.refreshParentSelect(null);
-    if (opts.parentId) document.getElementById('fParent').value = opts.parentId;
+    if (opts.parentId) this.parentSelect.setValue(opts.parentId);
     const groupRow = document.getElementById('fldGroupRow');
     if (this.state.settings?.enableGroups) {
       groupRow.hidden = false;
-      this._populateGroupSelect(document.getElementById('fGroup'), opts.groupId ?? this._defaultGroupIdForCreate());
+      this._populateGroupSelect(this.groupSelect, opts.groupId ?? this._defaultGroupIdForCreate());
     } else {
       groupRow.hidden = true;
     }
@@ -2939,7 +3051,7 @@ const Main = {
     if (treeGroupRow) {
       treeGroupRow.hidden = !this.state.settings?.enableGroups;
       if (!treeGroupRow.hidden) {
-        this._populateGroupSelect(document.getElementById('fTreeGroup'), this._defaultGroupIdForCreate());
+        this._populateGroupSelect(this.treeGroupSelect, this._defaultGroupIdForCreate());
       }
     }
     this._refreshTreeCount();
@@ -3012,7 +3124,7 @@ const Main = {
     try {
       const treeGroupRow = document.getElementById('treeGroupRow');
       const rootGroupId = (treeGroupRow && !treeGroupRow.hidden)
-        ? (document.getElementById('fTreeGroup').value || null)
+        ? (this.treeGroupSelect.getValue() || null)
         : null;
       const stack = [];
       const rootIds = [];
@@ -3132,11 +3244,11 @@ const Main = {
       if (endBadge) endBadge.hidden = true;
     }
     this.refreshParentSelect(id);
-    if (t.parentId) document.getElementById('fParent').value = t.parentId;
+    if (t.parentId) this.parentSelect.setValue(t.parentId);
     const groupRow = document.getElementById('fldGroupRow');
     if (this.state.settings?.enableGroups) {
       groupRow.hidden = false;
-      this._populateGroupSelect(document.getElementById('fGroup'), t.groupId || '');
+      this._populateGroupSelect(this.groupSelect, t.groupId || '');
     } else {
       groupRow.hidden = true;
     }
@@ -3273,7 +3385,7 @@ const Main = {
     if (!title) { alert('请输入标题'); return; }
     const startRaw = document.getElementById('fStart').value;
     const endRaw = document.getElementById('fEnd').value;
-    const parentId = document.getElementById('fParent').value || null;
+    const parentId = this.parentSelect.getValue() || null;
 
     if (endRaw && !startRaw) {
       alert('请先设置开始时间');
@@ -3305,7 +3417,7 @@ const Main = {
     const groupRow = document.getElementById('fldGroupRow');
     const groupVisible = groupRow && !groupRow.hidden;
     if (!this.editingId && groupVisible) {
-      body.groupId = document.getElementById('fGroup').value || null;
+      body.groupId = this.groupSelect.getValue() || null;
     }
 
     try {
@@ -3325,7 +3437,7 @@ const Main = {
         if (groupVisible) {
           const newGroup = parentId
             ? ((this.state.todos.find(x => x.id === parentId) || {}).groupId || null)
-            : (document.getElementById('fGroup').value || null);
+            : (this.groupSelect.getValue() || null);
           if (cur && (cur.groupId || null) !== newGroup) {
             await API.setTodoGroup(this.editingId, newGroup);
           }
