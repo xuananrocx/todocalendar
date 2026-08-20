@@ -1,6 +1,6 @@
 [package]
 name = "todocalendar"
-version = "0.4.34"
+version = "0.4.45"
 description = "Lightweight calendar + todo app"
 edition = "2021"
 
