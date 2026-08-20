@@ -76,7 +76,6 @@ pub struct Settings {
     pub theme: String,     // light | dark | system
     pub font_size: String, // small | medium | large
     pub compact: bool,
-    pub show_icons: bool,
     pub week_start: String, // monday | sunday
     pub show_week_number: bool,
     pub show_ongoing_in_calendar: bool,
@@ -136,7 +135,6 @@ impl Default for Settings {
             theme: "light".into(),
             font_size: "medium".into(),
             compact: false,
-            show_icons: false,
             week_start: "monday".into(),
             show_week_number: false,
             show_ongoing_in_calendar: false,

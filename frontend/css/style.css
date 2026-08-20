@@ -2236,6 +2236,8 @@ body.bulk-mode .drag-handle { display: none; }
   border: 1px solid var(--border); border-radius: 6px;
 }
 .archive-days-row.disabled { opacity: .55; }
+.switch-row.disabled { opacity: .55; }
+.switch-row.disabled .toggle { cursor: not-allowed; }
 .number-setting { display: flex; align-items: center; gap: 7px; color: var(--muted); }
 .number-setting input {
   width: 78px; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px;

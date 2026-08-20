@@ -500,7 +500,7 @@ const Main = {
     }
   },
 
-  // 把 settings 应用到 <html> 根元素 (data-theme / data-font-size / data-compact / data-show-icons)
+  // 把 settings 应用到 <html> 根元素 (data-theme / data-font-size / data-compact)
   startClock() {
     const clockEl = document.getElementById('timeClock');
     if (!clockEl) return;
@@ -1019,7 +1019,6 @@ const Main = {
     html.setAttribute('data-theme', theme);
     html.setAttribute('data-font-size', s.fontSize || 'medium');
     html.setAttribute('data-compact', s.compact ? 'true' : 'false');
-    html.setAttribute('data-show-icons', s.showIcons === false ? 'false' : 'true');
     html.setAttribute('data-numbering-palette', s.numberingPalette || 'classic');
     html.setAttribute('data-theme-color', s.themeColor || 'blue');
     html.setAttribute('data-font-color', s.fontColor || 'default');
@@ -1799,8 +1798,8 @@ const Main = {
     </div>`;
   },
 
-  _toggle(checked, onChange, title, desc) {
-    return `<div class="switch-row">
+  _toggle(checked, onChange, title, desc, disabled = false) {
+    return `<div class="switch-row ${disabled ? 'disabled' : ''}">
       <div class="meta"><div class="title">${title}${desc ? this._hint(desc) : ''}</div></div>
       <div class="toggle ${checked ? 'on' : ''}" data-onchange="${onChange}"></div>
     </div>`;
@@ -1875,6 +1874,12 @@ const Main = {
           ], s.statsStyle || 'text', 'statsStyle')}
         </div>
         <div class="settings-row">${this._toggle(s.compact, 'compact', '紧凑模式', '缩小行距显示更多内容')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">分组</div>
+        <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
+        <div class="settings-row">${this._toggle(s.enableGroups === true && s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤', s.enableGroups !== true)}</div>
+        <div class="settings-row">${this._toggle(s.enableGroups === true && s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部', s.enableGroups !== true)}</div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">时间与时钟</div>
@@ -2091,7 +2096,7 @@ const Main = {
         <div class="settings-row">${this._toggle(s.showSingleAdd !== false, 'showSingleAdd', '单个添加子代办', '在父待办行显示 + 按钮,关闭后仅保留批量入口')}</div>
         </div>
         <div class="settings-group">
-        <div class="settings-section-title">排序与分组</div>
+        <div class="settings-section-title">排序与拖动</div>
         <div class="settings-row">
           <div class="settings-row-label">排序方式${this._hint('自动排序按结束日期由近到远排列；手动排序可拖动调整顺序。自动模式下仅允许同截止日期内拖动微调')}</div>
           ${this._seg([
@@ -2104,10 +2109,6 @@ const Main = {
             {value:'sibling',label:'仅同级'},{value:'tree',label:'跨层移动'}
           ], s.dragMode || 'sibling', 'dragMode')}
         </div>
-        <div class="settings-row">${this._toggle(s.enableGroups === true, 'enableGroups', '启用分组', '开启后顶部出现分组栏,可创建自定义分组(Default 为系统内置,不可删除)')}</div>
-        <div class="settings-row">${this._toggle(s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤')}</div>
-        <div class="settings-row">${this._toggle(s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部')}</div>
-        <div class="settings-row">${this._toggle(s.showIcons !== false, 'showIcons', '显示分类图标', '待办条目左侧显示分组对应的分类图标(按分组即分类的规划,图标列功能尚未实现)')}</div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">父子联动</div>
@@ -2240,6 +2241,7 @@ const Main = {
     content.querySelectorAll('.toggle').forEach(tg => {
       const onChange = tg.dataset.onchange;
       tg.onclick = () => {
+        if (tg.closest('.switch-row')?.classList.contains('disabled')) return;
         const patch = {};
         patch[onChange] = !s[onChange];
         Object.assign(s, patch);
