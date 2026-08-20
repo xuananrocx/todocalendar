@@ -576,7 +576,16 @@ const Main = {
   },
 
   async bulkSelectAll() {
-    this.state.bulkSelected = new Set(this.state.todos.map(t => t.id));
+    // 只选当前视图(分组 tab 过滤);hideDone 时隐藏的已完成不选
+    const active = this.state.activeGroup || '__all__';
+    const hideDone = this.state.hideDone;
+    const inView = this.state.todos.filter(t => {
+      if (active === '__default__') { if (t.groupId) return false; }
+      else if (active !== '__all__' && t.groupId !== active) return false;
+      if (hideDone && t.done) return false;
+      return true;
+    });
+    this.state.bulkSelected = new Set(inView.map(t => t.id));
     this._renderBulkState();
     try {
       await API.setAllExpanded(true);
@@ -874,7 +883,13 @@ const Main = {
     let dragTabId = null;
     bar.querySelectorAll('.group-tab').forEach((el) => {
       el.addEventListener('click', () => {
+        const changed = el.dataset.id !== (this.state.activeGroup || '__all__');
         this.state.activeGroup = el.dataset.id;
+        // 批量模式下切分组:清空已选,防止误操作看不见的项
+        if (changed && this.state.bulkMode && this.state.bulkSelected?.size) {
+          this.state.bulkSelected = new Set();
+          this._renderBulkState();
+        }
         this.renderGroupBar();
         Render.renderAll(this.state);
       });
