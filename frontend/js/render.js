@@ -729,7 +729,7 @@ const Render = {
       row.appendChild(cb);
 
       const settings = state.settings || {};
-      const isPriority = !!node.isPriority;
+      const isPriority = !!node.isPriority && !node.done;
       const isSuspended = !!node.suspendedAt;
       if (isPriority) row.classList.add('is-priority');
       if (isSuspended) row.classList.add('is-suspended');
