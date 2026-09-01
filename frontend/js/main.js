@@ -1104,6 +1104,7 @@ const Main = {
     this._applyGlassVars();
     html.setAttribute('data-font-size', s.fontSize || 'medium');
     html.setAttribute('data-compact', s.compact ? 'true' : 'false');
+    html.setAttribute('data-suspended-grey', s.suspendedGrey === true ? 'true' : 'false');
     html.setAttribute('data-numbering-palette', s.numberingPalette || 'classic');
     html.setAttribute('data-theme-color', s.themeColor || 'blue');
     html.setAttribute('data-font-color', s.fontColor || 'default');
@@ -2250,7 +2251,7 @@ const Main = {
         </div>
         </div>
         <div class="settings-group">
-        <div class="settings-section-title">优先待办</div>
+        <div class="settings-section-title">优先与搁置</div>
         <div class="settings-row">
           <div class="settings-row-label">优先待办高亮${this._hint('优先待办的视觉强调方式:图标=橙色线性火焰;动态=Canvas 粒子火焰动画(悬停火势变大);标签=实心橙"优先"标签;背景=标题日落渐变底+白字')}</div>
           ${this._seg([
@@ -2258,6 +2259,7 @@ const Main = {
           ], s.priorityHighlight || 'tag', 'priorityHighlight')}
         </div>
         <div class="settings-row">${this._toggle(s.priorityAutoTop !== false, 'priorityAutoTop', '优先待办自动置顶', '自动排序模式下,优先待办置顶;搁置待办下沉到已完成之上')}</div>
+        <div class="settings-row">${this._toggle(s.suspendedGrey === true, 'suspendedGrey', '搁置待办置灰', '开启后,搁置待办的标题显示为已完成同款灰色(无删除线);列表与日详情生效')}</div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">添加</div>

@@ -801,6 +801,9 @@ body.bulk-mode .drag-handle { display: none; }
 }
 .title.done { color: #94a3b8; text-decoration: line-through; }
 .title.overdue { color: var(--overdue); }
+/* 搁置待办置灰开关:原色淡化,无删除线 */
+[data-suspended-grey="true"] .is-suspended .title { opacity: .5; }
+[data-suspended-grey="true"] .day-label.suspended { opacity: .5; }
 
 .time-tag {
   font-size: 10px;

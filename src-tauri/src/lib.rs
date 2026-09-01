@@ -127,6 +127,7 @@ pub struct Settings {
     pub holiday_last_update: Option<String>,
     pub priority_highlight: String, // none | icon | bar | bg | full
     pub priority_auto_top: bool,    // 自动排序模式下优先待办置顶
+    pub suspended_grey: bool,       // 搁置待办标题置灰(完成同款灰,无删除线)
     pub calendar_follow_group: bool, // 日历/日详情跟随分组筛选
     pub stats_follow_group: bool,   // 统计条跟随分组筛选
     pub default_group_name: String,      // 内置 Default 分组显示名
@@ -190,6 +191,7 @@ impl Default for Settings {
             holiday_last_update: None,
             priority_highlight: "bg".into(),
             priority_auto_top: true,
+            suspended_grey: false,
             calendar_follow_group: true,
             stats_follow_group: false,
             default_group_name: "Default".into(),

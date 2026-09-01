@@ -1318,7 +1318,7 @@ const Render = {
 
     function makeLabel(todo) {
       const label = document.createElement('span');
-      label.className = 'day-label' + (todo.done ? ' done' : '');
+      label.className = 'day-label' + (todo.done ? ' done' : (todo.suspendedAt ? ' suspended' : ''));
       if (Render.isOverdue(todo, today)) label.classList.add('overdue');
       label.textContent = todo.title;
       return label;
