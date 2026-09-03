@@ -89,8 +89,10 @@ body {
 }
 .topbar-main {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px 20px;
+  padding: 10px 14px;
 }
+/* 仅合并模式且分组行可见时,保留文字↔横线的大间隔 */
+.topbar:not(.gb-solo):has(> .group-bar:not([hidden])) .topbar-main { padding-bottom: 20px; }
 .topbar-main > * { position: relative; z-index: 1; }
 .brand { font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; gap: 6px; }
 .stats { color: var(--muted); font-size: 12px; }
