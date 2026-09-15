@@ -2158,6 +2158,15 @@ const Main = {
             ${this._colorSwatch('slate', '灰', '#64748b', null, s.startEventCustomColor)}
           </div>` : ''}
         </div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">日详情</div>
+        <div class="settings-row">
+          <div class="settings-row-label">默认展开${this._hint('全折叠:进入日详情全部折叠;跟随列表:按列表当前展开状态快照;智能折叠:默认折叠,仅自动展开当天命中任务的祖先链(三种模式下的展开/折叠都不写库,退出即弃)')}</div>
+          ${this._seg([
+            {value:'all-collapsed',label:'全折叠'},{value:'follow-list',label:'跟随列表'},{value:'smart',label:'智能折叠'}
+          ], s.dayExpandDefault || 'all-collapsed', 'dayExpandDefault')}
+        </div>
         <div class="settings-row">
           <div class="settings-row-label">日详情父待办背景</div>
           ${this._seg([
@@ -2175,15 +2184,6 @@ const Main = {
             ${this._colorSwatch('aurora', '极光', '#10b981', '#06b6d4', s.dayItemCustomColor)}
             ${this._colorSwatch('flame', '火焰', '#ef4444', '#f97316', s.dayItemCustomColor)}
           </div>` : ''}
-        </div>
-        </div>
-        <div class="settings-group">
-        <div class="settings-section-title">日详情</div>
-        <div class="settings-row">
-          <div class="settings-row-label">默认展开${this._hint('全折叠:进入日详情全部折叠;跟随列表:按列表当前展开状态快照;智能折叠:默认折叠,仅自动展开当天命中任务的祖先链(三种模式下的展开/折叠都不写库,退出即弃)')}</div>
-          ${this._seg([
-            {value:'all-collapsed',label:'全折叠'},{value:'follow-list',label:'跟随列表'},{value:'smart',label:'智能折叠'}
-          ], s.dayExpandDefault || 'all-collapsed', 'dayExpandDefault')}
         </div>
         </div>
         <div class="settings-group">
