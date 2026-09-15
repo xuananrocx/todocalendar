@@ -137,8 +137,8 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            theme: "light".into(),
-            glass_strength: 60,
+            theme: "system".into(),
+            glass_strength: 65,
             font_size: "medium".into(),
             compact: false,
             week_start: "monday".into(),
@@ -170,7 +170,7 @@ impl Default for Settings {
             enable_groups: false,
             group_bar_merged: false,
             font_color: "warm1".into(),
-            day_item_color_mode: "theme".into(),
+            day_item_color_mode: "none".into(),
             day_item_custom_color: "deep".into(),
             todo_item_color_mode: "none".into(),
             todo_item_custom_color: "aurora".into(),
@@ -182,16 +182,16 @@ impl Default for Settings {
             calendar_child_display: "main-only".into(),
             close_on_outside_click: true,
             weekend_color: "none".into(),
-            stats_style: "none".into(),
-            clock_show_time: true,
+            stats_style: "text".into(),
+            clock_show_time: false,
             clock_show_seconds: false,
             holiday_color: "none".into(),
-            show_rest_badge: false,
+            show_rest_badge: true,
             holiday_auto_update: true,
             holiday_last_update: None,
             priority_highlight: "bg".into(),
             priority_auto_top: true,
-            suspended_grey: false,
+            suspended_grey: true,
             calendar_follow_group: true,
             stats_follow_group: false,
             default_group_name: "Default".into(),
@@ -1369,10 +1369,13 @@ fn open_external(url: String) -> Result<(), String> {
     Ok(())
 }
 
-/// 重置设置为默认值
+/// 重置设置为默认值(内置分组的名字/颜色属于用户数据,不重置)
 #[tauri::command]
 fn reset_settings(app: tauri::AppHandle) -> Settings {
-    let s = Settings::default();
+    let cur = load_settings(&settings_file(&app));
+    let mut s = Settings::default();
+    s.default_group_name = cur.default_group_name;
+    s.default_group_color = cur.default_group_color;
     save_settings(&settings_file(&app), &s);
     s
 }
