@@ -2176,6 +2176,13 @@ body.bulk-mode .drag-handle { display: none; }
   overflow-wrap: anywhere;
   color: var(--text); font-size: 13px;
 }
+/* 搜索命中关键词高亮(mark 默认黄底需覆盖,深浅色通用) */
+mark.history-hl {
+  background: color-mix(in srgb, #f59e0b 32%, transparent);
+  color: inherit;
+  border-radius: 2px;
+  padding: 0 1px;
+}
 .history-node-time {
   color: var(--muted); font-size: 11px;
   flex-shrink: 0;

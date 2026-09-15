@@ -1525,19 +1525,16 @@ const Render = {
       if (!query) return true;
       return (todo.title || '').toLocaleLowerCase().includes(query);
     };
-    const filtered = archivedTodos.filter(matches);
-
-    meta.textContent = query
-      ? `${filtered.length} / ${archivedTodos.length} 项`
-      : `${archivedTodos.length} 项归档`;
-
-    if (!filtered.length) {
-      const empty = document.createElement('div');
-      empty.className = 'history-empty';
-      empty.textContent = archivedTodos.length ? '没有匹配的归档' : '还没有归档记录';
-      body.appendChild(empty);
-      return;
-    }
+    // 匹配池用全量数据:未归档的父/子标题也能命中,把对应的归档树带出来
+    const filteredSet = new Set(allTodos.filter(matches).map(t => t.id));
+    const escapeHtml = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightTitle = (raw) => {
+      const t = raw || '(无标题)';
+      if (!query) return escapeHtml(t);
+      const idx = t.toLocaleLowerCase().indexOf(query);
+      if (idx < 0) return escapeHtml(t);
+      return escapeHtml(t.slice(0, idx)) + "<mark class='history-hl'>" + escapeHtml(t.slice(idx, idx + query.length)) + "</mark>" + escapeHtml(t.slice(idx + query.length));
+    };
 
     const childrenOf = new Map();
     for (const todo of archivedTodos) {
@@ -1552,7 +1549,13 @@ const Render = {
     };
     for (const arr of childrenOf.values()) arr.sort(sortByArchivedTime);
 
-    const filteredSet = new Set(filtered.map(t => t.id));
+    // 全量子树关系:匹配时把未归档成员也纳入(卡片渲染仍只用 childrenOf)
+    const childrenOfAll = new Map();
+    for (const todo of allTodos) {
+      if (!todo.parentId) continue;
+      if (!childrenOfAll.has(todo.parentId)) childrenOfAll.set(todo.parentId, []);
+      childrenOfAll.get(todo.parentId).push(todo);
+    }
     const rootHasMatch = (root) => {
       const stack = [root];
       const seen = new Set();
@@ -1561,20 +1564,32 @@ const Render = {
         if (!cur || seen.has(cur.id)) continue;
         seen.add(cur.id);
         if (filteredSet.has(cur.id)) return true;
-        const kids = childrenOf.get(cur.id) || [];
+        const kids = childrenOfAll.get(cur.id) || [];
         for (const k of kids) stack.push(k);
       }
       return false;
     };
 
-    const roots = [];
+    const allRoots = [];
     const visitedRoot = new Set();
     for (const todo of archivedTodos) {
       const root = findRoot(todo);
       if (visitedRoot.has(root.id)) continue;
-      if (!rootHasMatch(root)) continue;
       visitedRoot.add(root.id);
-      roots.push(root);
+      allRoots.push(root);
+    }
+    const roots = query ? allRoots.filter(rootHasMatch) : allRoots;
+
+    meta.textContent = query
+      ? `命中 ${roots.length} / ${allRoots.length} 条记录`
+      : `${archivedTodos.length} 项归档`;
+
+    if (!roots.length) {
+      const empty = document.createElement('div');
+      empty.className = 'history-empty';
+      empty.textContent = archivedTodos.length ? '没有匹配的归档' : '还没有归档记录';
+      body.appendChild(empty);
+      return;
     }
     const rootArchivedTime = (root) => {
       if (root.archivedAt) return parseTime(root.archivedAt)?.getTime() ?? 0;
@@ -1610,6 +1625,8 @@ const Render = {
     };
 
     const allCollapsed = state.historyCollapsed !== false;
+    // 搜索时命中的树默认展开,清空搜索后恢复全局折叠状态
+    const startCollapsed = query ? false : allCollapsed;
 
     const renderNode = (todo, depth, container) => {
       const node = document.createElement('div');
@@ -1620,7 +1637,7 @@ const Render = {
       dot.className = 'history-node-dot';
       const title = document.createElement('span');
       title.className = 'history-node-title';
-      title.textContent = todo.title || '(无标题)';
+      title.innerHTML = highlightTitle(todo.title);
       const time = document.createElement('span');
       time.className = 'history-node-time';
       const completed = parseTime(todo.completedAt);
@@ -1741,7 +1758,7 @@ const Render = {
       rootDot.className = 'history-node-dot root';
       const headTitle = document.createElement('div');
       headTitle.className = 'history-card-title';
-      headTitle.textContent = root.title || '(无标题)';
+      headTitle.innerHTML = highlightTitle(root.title);
       if (!isRootArchived) {
         const tag = document.createElement('span');
         tag.className = 'unarchived-tag';
@@ -1822,8 +1839,8 @@ const Render = {
       const collapseBtn = document.createElement('button');
       collapseBtn.type = 'button';
       collapseBtn.className = 'btn ghost history-card-collapse-btn';
-      collapseBtn.title = allCollapsed ? '展开' : '折叠';
-      collapseBtn.innerHTML = allCollapsed ? Icon.chevronRight() : Icon.chevronDown();
+      collapseBtn.title = startCollapsed ? '展开' : '折叠';
+      collapseBtn.innerHTML = startCollapsed ? Icon.chevronRight() : Icon.chevronDown();
       collapseBtn.onclick = (e) => {
         e.stopPropagation();
         const body2 = card.querySelector('.history-card-body');
@@ -1837,7 +1854,7 @@ const Render = {
       card.appendChild(header);
 
       const body2 = document.createElement('div');
-      body2.className = 'history-card-body' + (allCollapsed ? ' collapsed' : '');
+      body2.className = 'history-card-body' + (startCollapsed ? ' collapsed' : '');
       const kids = childrenOf.get(root.id) || [];
       for (const k of kids) renderNode(k, 0, body2);
       if (!kids.length) {
