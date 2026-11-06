@@ -107,6 +107,26 @@ const API = {
     return await invoke('open_external', { url });
   },
 
+  // ===== Memos(备忘录) =====
+  async listMemos() {
+    return await invoke('list_memos');
+  },
+  async saveMemoEntry(entry) {
+    return await invoke('save_memo_entry', { entry });
+  },
+  async deleteMemoEntry(id) {
+    return await invoke('delete_memo_entry', { id });
+  },
+  async reorderMemos(ids) {
+    return await invoke('reorder_memos', { ids });
+  },
+  async memoWinToggle() {
+    return await invoke('memo_win_toggle');
+  },
+  async memoWinHideWindow() {
+    return await invoke('memo_win_hide_window');
+  },
+
   // ===== Dialog helpers(暂未使用,保留) =====
   async pickSavePath(defaultName) {
     return await dialog.save({

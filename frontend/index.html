@@ -21,6 +21,7 @@
         <span class="time-clock-sep"></span>
         <span class="time-clock-hm"></span>
       </div>
+      <button id="btnMemo" class="icon-btn" title="备忘录" hidden><i data-icon="stickyNote"></i></button>
       <button id="btnBulkMode" class="icon-btn" title="批量操作"><i data-icon="checkSquare"></i></button>
       <button id="btnNewTree" class="btn ghost" title="批量创建多个父待办及其子待办"><i data-icon="list"></i> 批量新建</button>
       <button id="btnNew" class="btn primary"><i data-icon="plus"></i> 新建待办</button>
@@ -30,6 +31,7 @@
         <!-- 方案 A: 下拉菜单 -->
         <div class="dropdown" id="dropdown" hidden>
           <div class="dropdown-group-label">数据</div>
+          <div class="dropdown-item" data-action="toggleMemo" id="ddMemoItem" hidden><span class="label"><i data-icon="stickyNote"></i>备忘录</span></div>
           <div class="dropdown-item" data-action="openHistory"><span class="label"><i data-icon="archive"></i>归档记录</span></div>
           <div class="dropdown-item" data-action="exportJson"><span class="label"><i data-icon="upload"></i>导出 JSON 备份</span></div>
           <div class="dropdown-item" data-action="importJson"><span class="label"><i data-icon="download"></i>导入 JSON</span></div>
@@ -99,6 +101,21 @@
     <button id="btnBulkDelete" class="btn danger" disabled><i data-icon="trash"></i> 删除</button>
   </div>
 
+  <!-- 备忘录侧栏 + 主内容(列表/日历) 分栏 -->
+  <div class="memo-layout" id="memoLayout">
+    <aside class="memo-side" id="memoSide" hidden>
+      <div class="memo-side-head">
+        <span class="memo-side-title"><i data-icon="stickyNote"></i> 备忘录</span>
+        <span class="memo-count" id="memoCount">0</span>
+        <span class="spacer"></span>
+        <button id="btnMemoCollapse" class="icon-btn memo-head-btn" title="收起备忘录(菜单里可再打开)"><i data-icon="chevronLeft"></i></button>
+        <button id="btnMemoAdd" class="icon-btn memo-head-btn" title="新建备忘"><i data-icon="plus"></i></button>
+      </div>
+      <div class="memo-list" id="memoList"></div>
+    </aside>
+    <div class="memo-divider" id="memoDivider" hidden title="拖动调整宽度"></div>
+    <div class="memo-main">
+
   <!-- 上半部分:列表 -->
   <section class="list-section">
     <div class="list-header">
@@ -139,6 +156,9 @@
     </div>
     <div class="cal-grid" id="calGrid"></div>
   </section>
+
+    </div><!-- /memo-main -->
+  </div><!-- /memo-layout -->
 </div>
 
 <!-- 日视图:覆盖整个应用 -->
@@ -433,6 +453,54 @@
   </div>
 </div>
 
+<!-- 备忘录:新建/编辑弹窗 -->
+<div class="modal-mask" id="memoEditMask" hidden>
+  <div class="modal memo-modal">
+    <h3 id="memoEditTitle">新建备忘</h3>
+    <label>标题
+      <input type="text" id="fMemoTitle" placeholder="这条备忘叫什么" maxlength="100" autocomplete="off">
+    </label>
+    <label>内容
+      <textarea id="fMemoBody" rows="4" placeholder="多行速查内容;粘贴的网址会自动识别为可点击链接"></textarea>
+    </label>
+    <div class="memo-edit-links-label">跳转链接 <span class="memo-edit-links-hint">正文里识别到的新网址会自动加入,可改名</span></div>
+    <div id="memoLinkRows"></div>
+    <button type="button" id="btnMemoAddLink" class="btn ghost memo-add-link"><i data-icon="plus"></i> 添加链接</button>
+    <label class="flag-toggle memo-pin-toggle" title="置顶的备忘始终排在最前">
+      <input type="checkbox" id="fMemoPinned">
+      <span class="toggle-track"><span class="toggle-thumb"></span></span>
+      <span class="toggle-text">置顶</span>
+    </label>
+    <div class="modal-actions">
+      <button id="btnMemoEntryDelete" class="btn danger" hidden>删除</button>
+      <span class="spacer"></span>
+      <button id="btnMemoEntryCancel" class="btn ghost">取消</button>
+      <button id="btnMemoEntrySave" class="btn primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 备忘录:迷你卡片(右下角浮动,常显内容由设置"常显内容"控制;置顶卡片固定最上,弹层插入卡片与悬浮钮之间,不遮挡) -->
+<div id="memoMini" hidden>
+  <div class="memo-mini-bar" id="memoMiniBar">
+    <div class="memo-mini-stack" id="memoMiniStack"></div>
+  </div>
+  <div class="memo-mini-pop" id="memoMiniPop" hidden>
+    <div class="memo-mini-pop-head">
+      <span class="memo-mini-pop-title">全部备忘</span>
+      <span class="spacer"></span>
+      <button id="btnMemoMiniCollapse" class="icon-btn memo-head-btn" title="展开全部条目"><i data-icon="chevronsUpDown"></i></button>
+      <button id="btnMemoMiniBarToggle" class="icon-btn memo-head-btn" title="收起常显卡片栏"><i data-icon="minimize"></i></button>
+      <button id="btnMemoMiniAdd" class="icon-btn memo-head-btn" title="新建备忘"><i data-icon="plus"></i></button>
+      <button id="btnMemoMiniHide" class="icon-btn memo-head-btn" title="隐藏迷你卡片(可从备忘录入口重新唤出)"><i data-icon="x"></i></button>
+    </div>
+    <div class="memo-mini-pop-list" id="memoMiniList"></div>
+  </div>
+  <button id="btnMemoMiniMore" class="memo-mini-fab" title="备忘录 · 点击查看全部">
+    <i data-icon="stickyNote"></i><span id="memoMiniBadge" class="memo-mini-badge" hidden></span>
+  </button>
+</div>
+
 <!-- Help Modal (关于 + 反馈 + 检查更新) -->
 <div class="modal-mask" id="helpMask" hidden>
   <div class="modal help-modal">
@@ -554,6 +622,7 @@
 <script src="js/icons.js"></script>
 <script src="js/api.js"></script>
 <script src="js/render.js"></script>
+<script src="js/memo.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

@@ -2544,6 +2544,10 @@ html[data-glass] .gb-solo .topbar-main,
 html[data-glass] .gb-solo .group-bar,
 html[data-glass] .group-card,
 html[data-glass] .calendar-section,
+html[data-glass] .memo-side,
+html[data-glass] .memo-mini-card,
+html[data-glass] .memo-mini-fab,
+html[data-glass] .memo-win,
 html[data-glass] .day-view,
 html[data-glass] .modal,
 html[data-glass] .prompt-modal,
@@ -2570,14 +2574,17 @@ html[data-glass] .group-bar { z-index: 0; }
 /* 锚定菜单类浮层:不跟随强度滑杆,高不透明度保证压住背后内容 */
 html[data-glass] .dropdown,
 html[data-glass] .group-manage,
-html[data-glass] .cs-menu {
+html[data-glass] .cs-menu,
+html[data-glass] .memo-mini-pop {
   background: var(--glass-menu);
 }
 /* 玻璃实底菜单上的 hover 可见性(半透明白 hover 在实底上不可见) */
 html[data-glass="light"] .dropdown-item:hover,
-html[data-glass="light"] .gm-row:hover { background: rgba(31,41,55,.08); }
+html[data-glass="light"] .gm-row:hover,
+html[data-glass="light"] .memo-mini-row-head:hover { background: rgba(31,41,55,.08); }
 html[data-glass="dark"] .dropdown-item:hover,
-html[data-glass="dark"] .gm-row:hover { background: rgba(255,255,255,.1); }
+html[data-glass="dark"] .gm-row:hover,
+html[data-glass="dark"] .memo-mini-row-head:hover { background: rgba(255,255,255,.1); }
 /* 玻璃强度滑杆:轨道画成 100%-12px 居中细条,两端正好对齐 thumb 圆心,0/100 无空余 */
 .glass-strength-row { display: flex; align-items: center; gap: 8px; }
 .glass-strength-row #glassStrengthVal { min-width: 2em; text-align: right; color: var(--muted); font-size: 12px; }
@@ -2933,3 +2940,427 @@ html[data-glass="dark"] .gm-row:hover { background: rgba(255,255,255,.1); }
   flex-shrink: 0;
 }
 .auto-time-badge[hidden] { display: none !important; }
+
+/* ===== 备忘录侧栏 ===== */
+.memo-layout {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+}
+.memo-layout.side-right { flex-direction: row-reverse; }
+.memo-side {
+  flex: none;
+  width: 230px;
+  min-width: 0;
+  background: var(--panel);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 12px;
+  box-sizing: border-box;
+}
+.memo-side[hidden] { display: none; }
+.memo-divider {
+  flex: none;
+  width: 4px;
+  border-radius: 3px;
+  cursor: col-resize;
+  transition: background .12s;
+}
+.memo-divider:hover,
+.memo-divider.active { background: color-mix(in srgb, var(--primary) 18%, transparent); }
+.memo-divider[hidden] { display: none; }
+.memo-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.memo-side-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 0 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.memo-side-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.memo-count {
+  font-size: 11px;
+  color: var(--muted);
+  background: var(--hover-bg);
+  border-radius: 9px;
+  padding: 1px 7px;
+  flex: none;
+}
+.memo-head-btn { width: 24px; height: 24px; }
+.memo-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.memo-layout .memo-list { padding: 0; }
+.memo-empty {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+  padding: 36px 0;
+  line-height: 2;
+}
+.memo-item {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 9px 10px;
+  background: var(--card);
+  cursor: grab;
+}
+.memo-item:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.memo-item.dragging { opacity: .45; }
+.memo-item.drop-before { box-shadow: 0 -2px 0 0 var(--primary); }
+.memo-item.drop-after { box-shadow: 0 2px 0 0 var(--primary); }
+.memo-item-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.memo-pin {
+  flex: none;
+  font-size: 10px;
+  color: #b45309;
+  background: #fef3c7;
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+[data-theme="dark"] .memo-pin { color: #fcd34d; background: rgba(180,83,9,.28); }
+.memo-item-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memo-item-edit {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  opacity: 0;
+  cursor: pointer;
+}
+.memo-item:hover .memo-item-edit { opacity: 1; }
+.memo-item-body {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--muted);
+  word-break: break-all;
+}
+.memo-inline-link {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px dashed color-mix(in srgb, var(--primary) 45%, transparent);
+  cursor: pointer;
+}
+.memo-inline-link:hover { border-bottom-style: solid; }
+.memo-item-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+}
+.memo-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--primary);
+  background: var(--primary-bg);
+  border: 1px solid color-mix(in srgb, var(--primary) 22%, transparent);
+  border-radius: 6px;
+  padding: 2px 8px;
+  cursor: pointer;
+  max-width: 100%;
+}
+.memo-chip span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.memo-chip .svg-icon { width: 11px; height: 11px; flex: none; }
+.memo-chip:hover { background: color-mix(in srgb, var(--primary) 14%, transparent); }
+
+/* 备忘小窗(独立窗口模式的 memo.html 页面) */
+body.memo-win-body { height: 100vh; overflow: hidden; }
+.memo-win {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+}
+.memo-win-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.memo-win-head .spacer { flex: 1; }
+.memo-win-head .icon-btn.active { color: var(--primary); background: var(--primary-bg); }
+.memo-win-head .memo-head-btn { width: 20px; height: 20px; }
+.memo-win-head .memo-head-btn .svg-icon { width: 13px; height: 13px; }
+.memo-win-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  background: var(--primary-bg);
+  border-radius: 999px;
+  padding: 3px 5px 3px 11px;
+  white-space: nowrap;
+}
+.memo-win-title .memo-count {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  color: var(--primary);
+  padding: 1px 7px;
+}
+
+/* 备忘录迷你卡片:右下角浮动,置顶条目常显 */
+.memo-mode-row.disabled, .memo-entry-row.disabled { opacity: .55; pointer-events: none; }
+#memoMini {
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+#memoMini[hidden] { display: none; }
+.memo-mini-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-height: 46vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  padding: 0;
+}
+.memo-mini-bar {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.memo-mini-bar[hidden] { display: none; }
+.memo-mini-card {
+  width: 264px;
+  flex: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 9px;
+}
+.memo-mini-card .memo-item-title { font-size: 12px; }
+.memo-mini-card:hover .memo-item-edit { opacity: 1; }
+.memo-mini-card-body {
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: break-all;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.memo-mini-card-body .memo-item-links { margin-top: 5px; }
+.memo-mini-fab {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(0,0,0,.1);
+}
+.memo-mini-fab:hover { border-color: var(--primary); color: var(--primary); }
+.memo-mini-fab .svg-icon { width: 16px; height: 16px; }
+.memo-mini-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  min-width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 9.5px;
+  line-height: 15px;
+  text-align: center;
+  padding: 0 3px;
+}
+/* 全部列表弹层(在置顶卡片与悬浮钮之间的正常流内,打开时把卡片顶上去,不遮挡) */
+.memo-mini-pop {
+  width: 264px;
+  max-height: 44vh;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.memo-mini-pop[hidden] { display: none; }
+.memo-mini-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 7px 7px 11px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  flex: none;
+}
+.memo-mini-pop-head .spacer { flex: 1; }
+.memo-mini-pop-list {
+  overflow-y: auto;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--bg);
+}
+.memo-mini-pop-list .memo-empty { padding: 20px 0; }
+/* 弹层条目与常显卡片同款式(仅少浮层阴影) */
+.memo-mini-row {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 7px 9px;
+}
+.memo-mini-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border-radius: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+.memo-mini-row-head:hover { color: var(--primary); }
+.memo-mini-row-head .memo-item-title { font-size: 12px; font-weight: 500; }
+.memo-mini-chev {
+  width: 13px;
+  height: 13px;
+  flex: none;
+  color: var(--muted);
+  transition: transform .12s;
+}
+.memo-mini-row.open .memo-mini-chev { transform: rotate(90deg); }
+.memo-mini-row-body {
+  padding: 3px 0 0 19px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: break-all;
+}
+.memo-mini-row-body .memo-item-links { margin-top: 5px; }
+.memo-mini-row:hover .memo-item-edit,
+.memo-mini-row.open .memo-item-edit { opacity: 1; }
+
+/* 备忘录编辑弹窗 */
+.modal.memo-modal { width: 480px; }
+.memo-modal textarea {
+  resize: vertical;
+  min-height: 84px;
+}
+.memo-edit-links-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 10px 0 6px;
+}
+.memo-edit-links-hint { font-size: 10.5px; opacity: .75; }
+.memo-link-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 26px;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.memo-link-row input {
+  width: 100%;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 6px 8px;
+}
+.memo-link-row input:focus { outline: none; border-color: var(--primary); }
+.memo-link-del { width: 24px; height: 24px; color: var(--muted); }
+.memo-link-del:hover { color: var(--danger); }
+.memo-add-link { font-size: 12px; padding: 4px 10px; }
+/* 置顶开关:不复用 .fld-flags 作用域,这里独立成套(与待办表单开关同视觉) */
+.modal .memo-pin-toggle {
+  display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+  gap: 6px; font-size: 12px; color: var(--muted);
+  cursor: pointer; user-select: none; margin: 12px 0 0;
+}
+.modal .memo-pin-toggle input { position: absolute; opacity: 0; pointer-events: none; width: 0; height: 0; }
+.modal .memo-pin-toggle .toggle-track {
+  width: 36px; height: 20px; background: #cbd5e1; border-radius: 9px;
+  position: relative; flex-shrink: 0; transition: background .15s;
+}
+.modal .memo-pin-toggle .toggle-thumb {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+  background: #fff; border-radius: 7px; box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  transition: left .15s;
+}
+.modal .memo-pin-toggle input:checked + .toggle-track { background: var(--primary); }
+.modal .memo-pin-toggle input:checked + .toggle-track .toggle-thumb { left: 18px; }
+.modal .memo-pin-toggle .toggle-text { line-height: 1.2; }
+
+/* 备忘小窗(窄窗口)适配:弹窗收窄 + 链接行改两行布局,避免挤压错乱 */
+body.memo-win-body .modal.memo-modal { width: min(480px, calc(100vw - 20px)); padding: 14px; gap: 8px; }
+body.memo-win-body .memo-edit-links-label { flex-wrap: wrap; row-gap: 2px; }
+body.memo-win-body .memo-link-row { grid-template-columns: 1fr 26px; }
+body.memo-win-body .memo-link-row .memo-link-name { grid-area: 1 / 1; }
+body.memo-win-body .memo-link-row .memo-link-del { grid-area: 1 / 2; }
+body.memo-win-body .memo-link-row .memo-link-url { grid-area: 2 / 1 / 3 / 3; }
+body.memo-win-body .memo-add-link { align-self: flex-start; }

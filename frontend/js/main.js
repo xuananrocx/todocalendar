@@ -165,6 +165,8 @@ const Main = {
     this.refreshDropdownValues();
     await this.reload();
     this.bindEvents();
+    await Memo.init();
+    this.listenCrossWindowEvents();
     await this.checkArchiveDue();
     this.watchSystemTheme();
     this.startClock();
@@ -212,6 +214,33 @@ const Main = {
       Render.renderHistory(this.state);
     } catch (e) {
       alert('加载归档记录失败:' + window.__tauriErrMsg(e));
+    }
+  },
+
+  // 跨窗口事件:备忘小窗的增删改同步主窗口数据;任一窗口改设置后同步本地状态
+  listenCrossWindowEvents() {
+    const { listen } = window.__TAURI__.event;
+    listen('memos-changed', () => Memo.load());
+    listen('settings-changed', async () => {
+      try { this.state.settings = await API.getSettings(); } catch { return; }
+      this.applySettingsToDom();
+    });
+  },
+
+  // 备忘录开关(菜单项/顶栏按钮共用,按显示方式切换侧栏/迷你卡片/小窗)
+  toggleMemoSidebar() {
+    this.toggleDropdown(false);
+    const mode = this.state.settings?.memoDisplayMode;
+    if (mode === 'window') {
+      API.memoWinToggle().catch(e => this.alertAction({ title: '打开失败', message: '打开备忘小窗失败:' + window.__tauriErrMsg(e) }));
+      return;
+    }
+    if (mode === 'mini') {
+      const open = this.state.settings?.memoMiniOpen !== false;
+      this.patchSettings({ memoMiniOpen: !open });
+    } else {
+      const open = this.state.settings?.memoSidebarOpen !== false;
+      this.patchSettings({ memoSidebarOpen: !open });
     }
   },
 
@@ -1120,6 +1149,7 @@ const Main = {
     const topbar = document.querySelector('.topbar');
     if (topbar) topbar.classList.toggle('gb-solo', s.groupBarMerged !== true);
     this.renderGroupBar();
+    Memo.applySettings(s);
   },
 
   // 乐观更新:立即改本地状态 + 重渲染,再异步发 API
@@ -1451,6 +1481,10 @@ const Main = {
   async patchSettings(patch) {
     const before = JSON.parse(JSON.stringify(this.state.settings));
     const groupsToggled = 'enableGroups' in patch && patch.enableGroups !== !!before.enableGroups;
+    // 备忘录:重新启用或切入某显示方式时重置展开状态,否则收起后从设置界面无法唤回
+    if (patch.memoEnabled === true) { patch.memoSidebarOpen = true; patch.memoMiniOpen = true; }
+    if (patch.memoDisplayMode === 'sidebar') patch.memoSidebarOpen = true;
+    if (patch.memoDisplayMode === 'mini') patch.memoMiniOpen = true;
     Object.assign(this.state.settings, patch);
     this.applySettingsToDom();
     this.refreshDropdownValues();
@@ -1660,6 +1694,11 @@ const Main = {
   closeSettingsModal() {
     document.getElementById('settingsMask').hidden = true;
     document.body.classList.remove('modal-open');
+  },
+
+  // 应用内样式提示(单按钮"知道了"),替代原生 alert
+  alertAction(opt) {
+    return this.confirmAction({ confirmText: '知道了', hideCancel: true, title: '提示', ...opt });
   },
 
   confirmAction({ title = '确认操作', message, messageHtml, confirmText = '确认', danger = false, hideCancel = false }) {
@@ -2057,6 +2096,42 @@ const Main = {
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.groupBarMerged === true, 'groupBarMerged', '分组栏合并到顶部卡片', '开启后分组栏与顶部时钟/按钮区合并为一张卡片,以横线分隔;关闭则分组栏单独成卡显示(默认独立卡片)', s.enableGroups !== true)}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.calendarFollowGroup !== false, 'calendarFollowGroup', '日历跟随分组筛选', '切到具体分组时,日历与日详情只显示该分组的待办;在"全部"tab 或关闭本开关时不过滤', s.enableGroups !== true)}</div>
         <div class="settings-row">${this._toggle(s.enableGroups === true && s.statsFollowGroup === true, 'statsFollowGroup', '统计条跟随分组筛选', '开启后统计条只统计当前分组的待办;默认关闭,始终统计全部', s.enableGroups !== true)}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">备忘录</div>
+        <div class="settings-row">${this._toggle(s.memoEnabled !== false, 'memoEnabled', '启用备忘录', '长期速查信息独立于待办列表,不参与统计;关闭后入口一并隐藏')}</div>
+        <div class="settings-row memo-mode-row ${s.memoEnabled !== false ? '' : 'disabled'}">
+          <div class="settings-row-label">显示方式${this._hint('侧边分栏:主界面侧边常驻侧栏,可拖宽,位置左侧/右侧可选;迷你卡片:右下角浮动小卡,常显内容可选;独立窗口:单独小窗,可拖到任意位置/副屏')}</div>
+          ${this._seg([
+            {value:'sidebar',label:'侧边分栏'},{value:'mini',label:'迷你卡片'},{value:'window',label:'独立窗口'}
+          ], ['mini','window'].includes(s.memoDisplayMode) ? s.memoDisplayMode : 'sidebar', 'memoDisplayMode')}
+        </div>
+        ${s.memoDisplayMode === 'sidebar' || !['mini','window'].includes(s.memoDisplayMode) ? `
+        <div class="settings-row memo-mode-row ${s.memoEnabled !== false ? '' : 'disabled'}">
+          <div class="settings-row-label">分栏位置${this._hint('侧边分栏模式下备忘录侧栏靠主界面哪一侧,默认左侧')}</div>
+          ${this._seg([
+            {value:'left',label:'左侧'},{value:'right',label:'右侧'}
+          ], s.memoSidePosition === 'right' ? 'right' : 'left', 'memoSidePosition')}
+        </div>
+        ` : ''}
+        ${s.memoDisplayMode === 'mini' ? `
+        <div class="settings-row memo-mode-row ${s.memoEnabled !== false ? '' : 'disabled'}">
+          <div class="settings-row-label">常显内容${this._hint('迷你卡片模式右下角常驻显示:仅置顶=只显示置顶条目(默认);全部=所有条目常显,置顶排前带徽章,不再单列置顶区;不常显=只留悬浮按钮,点击查看全部')}</div>
+          ${this._seg([
+            {value:'none',label:'不常显'},{value:'pinned',label:'仅置顶'},{value:'all',label:'全部'}
+          ], ['none','all'].includes(s.memoMiniShow) ? s.memoMiniShow : 'pinned', 'memoMiniShow')}
+        </div>
+        ` : ''}
+        ${s.memoDisplayMode === 'window' ? `
+        <div class="settings-row">${this._toggle(s.memoWinTop === true, 'memoWinTop', '独立窗口置顶', '备忘小窗始终显示在其他应用之上;小窗标题栏的 📌 也可切换', s.memoEnabled !== true)}</div>
+        <div class="settings-row">${this._toggle(s.memoWinRestore === true, 'memoWinRestore', '启动时恢复备忘小窗', '默认关闭:启动后从入口唤起;开启则随应用启动自动弹出并还原上次位置尺寸', s.memoEnabled !== true)}</div>
+        ` : ''}
+        <div class="settings-row memo-entry-row ${s.memoEnabled !== false ? '' : 'disabled'}">
+          <div class="settings-row-label">入口位置${this._hint('菜单项:⚙ 下拉"数据"组归档记录上方;顶栏按钮:顶部工具栏出现备忘录按钮。点击入口展开/收起当前显示方式对应的备忘界面')}</div>
+          ${this._seg([
+            {value:'menu',label:'菜单项'},{value:'topbar',label:'顶栏按钮'}
+          ], s.memoEntry || 'menu', 'memoEntry')}
+        </div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">时间与时钟</div>
@@ -2790,6 +2865,8 @@ const Main = {
     // Help modal
     const btnHelp = document.getElementById('btnHelp');
     btnHelp.onclick = (e) => { e.stopPropagation(); this.openHelp(); };
+    const btnMemo = document.getElementById('btnMemo');
+    btnMemo.onclick = (e) => { e.stopPropagation(); this.toggleMemoSidebar(); };
     document.getElementById('btnCloseHelp').onclick = () => this.closeHelp();
     this._attachMaskClose('helpMask', () => this.closeHelp());
     const repo = 'xuananrocx/todocalendar';
@@ -2882,6 +2959,8 @@ const Main = {
       if (!confirmMask.hidden) { this.closeConfirm(false); return; }
       const promptMask = document.getElementById('promptMask');
       if (!promptMask.hidden) { this.closePrompt({ type: 'cancel', value: '' }); return; }
+      const memoMask = document.getElementById('memoEditMask');
+      if (!memoMask.hidden) { Memo.closeEdit(); return; }
       const modal = document.getElementById('modalMask');
       if (!modal.hidden) { this.closeModal(); return; }
       const settings = document.getElementById('settingsMask');
@@ -2897,6 +2976,7 @@ const Main = {
     const s = this.state.settings;
     switch (action) {
       case 'openHistory': this.openHistory(); break;
+      case 'toggleMemo': this.toggleMemoSidebar(); break;
       case 'exportJson': this.handleDataAction('exportJson'); break;
       case 'importJson': this.handleDataAction('importJson'); break;
       case 'openDataDir': this.handleDataAction('openDataDir'); break;

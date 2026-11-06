@@ -69,6 +69,40 @@ pub struct Data {
     pub groups: Vec<Group>,
 }
 
+/// 备忘录:长期速查信息,独立于待办列表
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoLink {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoEntry {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub body: String,
+    #[serde(default)]
+    pub pinned: bool,
+    #[serde(default)]
+    pub order: i64,
+    #[serde(default)]
+    pub links: Vec<MemoLink>,
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoData {
+    pub version: String,
+    pub updated_at: String,
+    #[serde(default)]
+    pub entries: Vec<MemoEntry>,
+}
+
 /// 用户设置。新增字段直接加,旧 settings.json 缺字段时用 Default 补。
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -132,6 +166,19 @@ pub struct Settings {
     pub stats_follow_group: bool,   // 统计条跟随分组筛选
     pub default_group_name: String,      // 内置 Default 分组显示名
     pub default_group_color: Option<String>, // 内置 Default 分组卡片色
+    pub memo_enabled: bool,        // 备忘录功能开关
+    pub memo_entry: String,        // 备忘录入口位置 menu | topbar
+    pub memo_display_mode: String, // 备忘录显示方式 sidebar | mini | window
+    pub memo_sidebar_open: bool,   // 备忘录侧栏展开状态
+    pub memo_sidebar_width: i64,   // 备忘录侧栏宽度 px
+    pub memo_side_position: String, // 备忘录侧栏位置 left | right
+    pub memo_mini_open: bool,      // 迷你卡片显示状态
+    pub memo_mini_show: String,    // 迷你卡片常显内容 none | pinned | all
+    pub memo_mini_collapsed: bool, // 迷你卡片折叠状态(只显示标题)
+    pub memo_mini_bar_hidden: bool,// 迷你卡片常显栏收起状态
+    pub memo_win_top: bool,        // 备忘小窗置顶
+    pub memo_win_restore: bool,    // 启动时恢复备忘小窗
+    pub memo_win_rect: Option<Vec<i64>>, // 备忘小窗位置尺寸 [x,y,w,h] 逻辑像素
 }
 
 impl Default for Settings {
@@ -196,6 +243,19 @@ impl Default for Settings {
             stats_follow_group: false,
             default_group_name: "Default".into(),
             default_group_color: None,
+            memo_enabled: false,
+            memo_entry: "menu".into(),
+            memo_display_mode: "sidebar".into(),
+            memo_sidebar_open: true,
+            memo_sidebar_width: 230,
+            memo_side_position: "left".into(),
+            memo_mini_open: true,
+            memo_mini_show: "pinned".into(),
+            memo_mini_collapsed: false,
+            memo_mini_bar_hidden: false,
+            memo_win_top: false,
+            memo_win_restore: false,
+            memo_win_rect: None,
         }
     }
 }
@@ -1269,6 +1329,269 @@ fn set_todos_expanded(app: tauri::AppHandle, expanded: bool) -> Result<Data, Str
     Ok(result)
 }
 
+// ===== 备忘录 =====
+fn memos_file(app: &tauri::AppHandle) -> PathBuf {
+    app_dir(app).join("memos.json")
+}
+
+fn load_memos(file: &PathBuf) -> MemoData {
+    match fs::read_to_string(file) {
+        Ok(s) => serde_json::from_str::<MemoData>(&s).unwrap_or(MemoData {
+            version: "1".into(),
+            updated_at: now_iso(),
+            entries: vec![],
+        }),
+        Err(_) => MemoData {
+            version: "1".into(),
+            updated_at: now_iso(),
+            entries: vec![],
+        },
+    }
+}
+
+fn save_memos(file: &PathBuf, data: &MemoData) {
+    let json = serde_json::to_string_pretty(data).unwrap_or_else(|_| "{}".into());
+    let tmp = file.with_extension("json.tmp");
+    if fs::write(&tmp, json).is_ok() && fs::copy(&tmp, file).is_ok() {
+        let _ = fs::remove_file(&tmp);
+    }
+}
+
+fn sort_memos(entries: &mut Vec<MemoEntry>) {
+    entries.sort_by(|a, b| b.pinned.cmp(&a.pinned).then(a.order.cmp(&b.order)));
+}
+
+#[tauri::command]
+fn list_memos(app: tauri::AppHandle) -> MemoData {
+    let file = memos_file(&app);
+    let mut data = load_memos(&file);
+    sort_memos(&mut data.entries);
+    data
+}
+
+/// 新建(id 为空)或更新一条备忘;返回最新全量数据
+#[tauri::command]
+fn save_memo_entry(app: tauri::AppHandle, mut entry: MemoEntry) -> Result<MemoData, String> {
+    if entry.title.trim().is_empty() {
+        return Err("标题不能为空".into());
+    }
+    let file = memos_file(&app);
+    let mut data = load_memos(&file);
+    entry.title = entry.title.trim().to_string();
+    entry.updated_at = now_iso();
+    if entry.id.is_empty() {
+        entry.id = Uuid::new_v4().to_string();
+        // 新条目排在同置顶级别的最前
+        let min_order = data.entries.iter().map(|e| e.order).min().unwrap_or(0);
+        entry.order = min_order - 1;
+        data.entries.push(entry);
+    } else {
+        match data.entries.iter().position(|e| e.id == entry.id) {
+            Some(i) => {
+                // 置顶状态变化时跳到新分组最前(新置顶→全体最前;取消置顶→非置顶组最前)
+                if entry.pinned != data.entries[i].pinned {
+                    let pool_min = data
+                        .entries
+                        .iter()
+                        .filter(|e| e.pinned == entry.pinned)
+                        .map(|e| e.order)
+                        .min();
+                    let min_order = pool_min.map_or(0, |m| m.min(0));
+                    entry.order = min_order - 1;
+                } else {
+                    entry.order = data.entries[i].order;
+                }
+                data.entries[i] = entry;
+            }
+            None => return Err("条目不存在".into()),
+        }
+    }
+    data.updated_at = now_iso();
+    sort_memos(&mut data.entries);
+    save_memos(&file, &data);
+    let _ = app.emit("memos-changed", ());
+    Ok(data)
+}
+
+#[tauri::command]
+fn delete_memo_entry(app: tauri::AppHandle, id: String) -> MemoData {
+    let file = memos_file(&app);
+    let mut data = load_memos(&file);
+    data.entries.retain(|e| e.id != id);
+    data.updated_at = now_iso();
+    save_memos(&file, &data);
+    let _ = app.emit("memos-changed", ());
+    data
+}
+
+/// 按传入的 id 顺序重排(order = 下标)
+#[tauri::command]
+fn reorder_memos(app: tauri::AppHandle, ids: Vec<String>) -> MemoData {
+    let file = memos_file(&app);
+    let mut data = load_memos(&file);
+    for (i, id) in ids.iter().enumerate() {
+        if let Some(e) = data.entries.iter_mut().find(|e| e.id == *id) {
+            e.order = i as i64;
+        }
+    }
+    data.updated_at = now_iso();
+    sort_memos(&mut data.entries);
+    save_memos(&file, &data);
+    let _ = app.emit("memos-changed", ());
+    data
+}
+
+// ===== 备忘小窗(独立窗口模式) =====
+const MEMO_WIN_LABEL: &str = "memo";
+
+fn memo_win_visible(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window(MEMO_WIN_LABEL)
+        .map(|w| w.is_visible().unwrap_or(false))
+        .unwrap_or(false)
+}
+
+/// 小窗当前位置尺寸(逻辑像素)落库;拖动/缩放时节流 800ms 调用
+fn memo_win_save_rect(app: &tauri::AppHandle) {
+    let Some(w) = app.get_webview_window(MEMO_WIN_LABEL) else { return };
+    let (Some(p), Some(sz)) = (w.outer_position().ok(), w.inner_size().ok()) else {
+        eprintln!("[memo-win] save_rect: pos/size read failed");
+        return;
+    };
+    let sf = w.scale_factor().unwrap_or(1.0);
+    let lp = p.to_logical::<f64>(sf);
+    let ls = sz.to_logical::<f64>(sf);
+    // 窗口创建/隐藏瞬间会报停放坐标(-18286 之类)或 0x0 尺寸,跳过不落库
+    if ls.width < 1.0 || ls.height < 1.0 || lp.x.abs() > 10000.0 || lp.y.abs() > 10000.0 {
+        eprintln!("[memo-win] save_rect skip parked/zero rect");
+        return;
+    }
+    let file = settings_file(app);
+    let mut s = load_settings(&file);
+    s.memo_win_rect = Some(vec![
+        lp.x.round() as i64,
+        lp.y.round() as i64,
+        ls.width.round() as i64,
+        ls.height.round() as i64,
+    ]);
+    save_settings(&file, &s);
+    eprintln!(
+        "[memo-win] save_rect ok [{},{},{},{}]",
+        lp.x.round(),
+        lp.y.round(),
+        ls.width.round(),
+        ls.height.round()
+    );
+}
+
+/// 显示备忘小窗;不存在则按记忆的位置尺寸创建(默认 280x480),置顶状态取设置
+fn memo_win_show(app: &tauri::AppHandle) -> Result<(), String> {
+    let s = load_settings(&settings_file(app));
+    if let Some(w) = app.get_webview_window(MEMO_WIN_LABEL) {
+        w.set_always_on_top(s.memo_win_top).map_err(|e| e.to_string())?;
+        w.show().map_err(|e| e.to_string())?;
+        w.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        app,
+        MEMO_WIN_LABEL,
+        tauri::WebviewUrl::App("memo.html".into()),
+    )
+    .title("备忘录")
+    .min_inner_size(240.0, 320.0)
+    .always_on_top(s.memo_win_top);
+    // 记忆的位置必须还落在某个显示器上(副屏拔掉等情况回退默认),避免小窗"消失"
+    let rect_on_screen = |r: &Vec<i64>| -> bool {
+        app.available_monitors()
+            .map(|ms| {
+                ms.iter().any(|m| {
+                    let mp = m.position();
+                    let msz = m.size();
+                    r[0] >= mp.x as i64 - 60
+                        && r[1] >= mp.y as i64 - 60
+                        && r[0] < mp.x as i64 + msz.width as i64
+                        && r[1] < mp.y as i64 + msz.height as i64
+                })
+            })
+            .unwrap_or(false)
+    };
+    match s.memo_win_rect.as_ref() {
+        Some(r) if r.len() == 4 && r[2] >= 240 && r[3] >= 320 && rect_on_screen(r) => {
+            builder = builder
+                .position(r[0] as f64, r[1] as f64)
+                .inner_size(r[2] as f64, r[3] as f64);
+        }
+        _ => builder = builder.inner_size(280.0, 480.0),
+    }
+    let w = builder.build().map_err(|e| e.to_string())?;
+    // 全局 Builder::on_window_event 对运行时动态创建的窗口不生效,
+    // 必须在窗口实例上挂事件处理器。回调运行在事件循环线程上,
+    // 其中同步调窗口方法(读位置等)会派回事件循环 → 自锁死,
+    // 所以 hide/save_rect 一律开线程执行。
+    let app2 = app.clone();
+    let rect_last = std::sync::Arc::new(std::sync::Mutex::new(
+        std::time::Instant::now() - std::time::Duration::from_secs(10),
+    ));
+    let rect_last2 = rect_last.clone();
+    w.on_window_event(move |event| match event {
+        tauri::WindowEvent::CloseRequested { api, .. } => {
+            eprintln!("[memo-win] CloseRequested: prevent + hide(spawn)");
+            api.prevent_close();
+            let app3 = app2.clone();
+            std::thread::spawn(move || match memo_win_hide(&app3) {
+                Ok(()) => eprintln!("[memo-win] hide ok"),
+                Err(e) => eprintln!("[memo-win] hide failed: {e}"),
+            });
+        }
+        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+            let mut last = rect_last2.lock().unwrap();
+            if last.elapsed() >= std::time::Duration::from_millis(800) {
+                *last = std::time::Instant::now();
+                drop(last);
+                let app3 = app2.clone();
+                std::thread::spawn(move || memo_win_save_rect(&app3));
+            }
+        }
+        _ => {}
+    });
+    Ok(())
+}
+
+/// 隐藏备忘小窗(保留窗口,先存位置)
+fn memo_win_hide(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(w) = app.get_webview_window(MEMO_WIN_LABEL) {
+        eprintln!("[memo-win] hide begin");
+        memo_win_save_rect(app);
+        w.hide().map_err(|e| e.to_string())?;
+        eprintln!("[memo-win] hide end ok");
+    }
+    Ok(())
+}
+
+/// 备忘录入口点击(窗口模式):可见→隐藏,不可见→创建/显示
+#[tauri::command]
+fn memo_win_toggle(app: tauri::AppHandle) -> Result<bool, String> {
+    if memo_win_visible(&app) {
+        memo_win_hide(&app)?;
+        Ok(false)
+    } else {
+        memo_win_show(&app)?;
+        Ok(true)
+    }
+}
+
+/// 小窗页面内隐藏(标题栏关闭走 WindowEvent::CloseRequested 同样处理)
+#[tauri::command]
+fn memo_win_hide_window(app: tauri::AppHandle) -> Result<(), String> {
+    memo_win_hide(&app)
+}
+
+/// TEMP 诊断:前端把运行状态打到 dev 日志(排查 JS 是否真的在跑)
+#[tauri::command]
+fn diag_log(msg: String) {
+    eprintln!("[diag] {msg}");
+}
+
 #[tauri::command]
 fn list_settings(app: tauri::AppHandle) -> Settings {
     let file = settings_file(&app);
@@ -1280,6 +1603,7 @@ fn list_settings(app: tauri::AppHandle) -> Settings {
 fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Settings {
     let file = settings_file(&app);
     let mut s = load_settings(&file);
+    let (old_enabled, old_mode) = (s.memo_enabled, s.memo_display_mode.clone());
 
     if let Some(obj) = patch.as_object() {
         let mut cur = serde_json::to_value(&s).unwrap_or(Value::Null);
@@ -1293,6 +1617,22 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Settings 
         }
     }
     save_settings(&file, &s);
+
+    // 备忘小窗联动:置顶即时生效;关功能/切走窗口模式→隐藏;切入窗口模式→弹出
+    if let Some(w) = app.get_webview_window(MEMO_WIN_LABEL) {
+        if w.is_visible().unwrap_or(false) {
+            let _ = w.set_always_on_top(s.memo_win_top);
+        }
+    }
+    let want_win = s.memo_enabled && s.memo_display_mode == "window";
+    if !want_win {
+        if memo_win_visible(&app) {
+            let _ = memo_win_hide(&app);
+        }
+    } else if !old_enabled || old_mode != "window" {
+        let _ = memo_win_show(&app);
+    }
+    let _ = app.emit("settings-changed", ());
     s
 }
 
@@ -1376,7 +1716,13 @@ fn reset_settings(app: tauri::AppHandle) -> Settings {
     let mut s = Settings::default();
     s.default_group_name = cur.default_group_name;
     s.default_group_color = cur.default_group_color;
+    // 小窗位置记忆属于用户使用痕迹,保留
+    s.memo_win_rect = cur.memo_win_rect;
     save_settings(&settings_file(&app), &s);
+    if memo_win_visible(&app) {
+        let _ = memo_win_hide(&app);
+    }
+    let _ = app.emit("settings-changed", ());
     s
 }
 
@@ -1711,6 +2057,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            diag_log,
             list_todos,
             list_archived_todos,
             export_all_data,
@@ -1747,10 +2094,32 @@ pub fn run() {
             set_group_color,
             list_holidays,
             check_holiday_updates,
+            list_memos,
+            save_memo_entry,
+            delete_memo_entry,
+            reorder_memos,
+            memo_win_toggle,
+            memo_win_hide_window,
         ])
         .setup(|app| {
             apply_app_icon_on_startup(app.handle());
             maybe_auto_update_holidays(app.handle());
+            // 备忘小窗:开启"启动时恢复"才随启动弹出(默认关)
+            let s = load_settings(&settings_file(&app.handle()));
+            eprintln!(
+                "[memo-win] boot cond: enabled={} mode={} restore={}",
+                s.memo_enabled, s.memo_display_mode, s.memo_win_restore
+            );
+            if s.memo_enabled && s.memo_display_mode == "window" && s.memo_win_restore {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(400));
+                    match memo_win_show(&h) {
+                        Ok(()) => eprintln!("[memo-win] boot show ok"),
+                        Err(e) => eprintln!("[memo-win] boot show FAILED: {e}"),
+                    }
+                });
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

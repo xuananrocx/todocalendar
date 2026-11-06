@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>备忘录</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body class="memo-win-body">
+
+  <div class="memo-win">
+    <div class="memo-win-head">
+      <span class="memo-win-title">备忘录<span class="memo-count" id="memoCount">0</span></span>
+      <span class="spacer"></span>
+      <button id="btnMemoAdd" class="icon-btn memo-head-btn" title="新建备忘"><i data-icon="plus"></i></button>
+      <button id="btnMemoWinPin" class="icon-btn memo-head-btn" title="窗口置顶(显示在其他应用之上)"><i data-icon="pin"></i></button>
+    </div>
+    <div class="memo-list" id="memoList"></div>
+  </div>
+
+  <!-- 备忘录:新建/编辑弹窗(与主窗口同款) -->
+  <div class="modal-mask" id="memoEditMask" hidden>
+    <div class="modal memo-modal">
+      <h3 id="memoEditTitle">新建备忘</h3>
+      <label>标题
+        <input type="text" id="fMemoTitle" placeholder="这条备忘叫什么" maxlength="100" autocomplete="off">
+      </label>
+      <label>内容
+        <textarea id="fMemoBody" rows="4" placeholder="多行速查内容;粘贴的网址会自动识别为可点击链接"></textarea>
+      </label>
+      <div class="memo-edit-links-label">跳转链接 <span class="memo-edit-links-hint">正文里识别到的新网址会自动加入,可改名</span></div>
+      <div id="memoLinkRows"></div>
+      <button type="button" id="btnMemoAddLink" class="btn ghost memo-add-link"><i data-icon="plus"></i> 添加链接</button>
+      <label class="flag-toggle memo-pin-toggle" title="置顶的备忘始终排在最前">
+        <input type="checkbox" id="fMemoPinned">
+        <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        <span class="toggle-text">置顶</span>
+      </label>
+      <div class="modal-actions">
+        <button id="btnMemoEntryDelete" class="btn danger" hidden>删除</button>
+        <span class="spacer"></span>
+        <button id="btnMemoEntryCancel" class="btn ghost">取消</button>
+        <button id="btnMemoEntrySave" class="btn primary">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 应用内确认弹窗(与主窗口同款) -->
+  <div class="modal-mask confirm-mask" id="confirmMask" hidden>
+    <div class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+      <div class="confirm-heading">
+        <span class="confirm-icon" id="confirmIcon"><i data-icon="info"></i></span>
+        <h3 id="confirmTitle">确认操作</h3>
+      </div>
+      <p id="confirmMessage" class="confirm-message"></p>
+      <div class="modal-actions confirm-actions">
+        <span class="spacer"></span>
+        <button id="btnConfirmCancel" class="btn ghost">取消</button>
+        <button id="btnConfirmAccept" class="btn primary">确认</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/icons.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/memo.js"></script>
+  <script src="js/memo-win.js"></script>
+</body>
+</html>
