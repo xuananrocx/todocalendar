@@ -1485,13 +1485,32 @@ fn memo_win_save_rect(app: &tauri::AppHandle) {
 
 /// 显示备忘小窗;不存在则按记忆的位置尺寸创建(默认 280x480),置顶状态取设置
 fn memo_win_show(app: &tauri::AppHandle) -> Result<(), String> {
-    let s = load_settings(&settings_file(app));
     if let Some(w) = app.get_webview_window(MEMO_WIN_LABEL) {
+        let s = load_settings(&settings_file(app));
         w.set_always_on_top(s.memo_win_top).map_err(|e| e.to_string())?;
         w.show().map_err(|e| e.to_string())?;
         w.set_focus().map_err(|e| e.to_string())?;
         return Ok(());
     }
+    memo_win_create(app, true)
+}
+
+/// 确保小窗存在。visible=false 时只建不显示(启动预建用)。
+fn memo_win_ensure(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    if app.get_webview_window(MEMO_WIN_LABEL).is_some() {
+        if visible {
+            return memo_win_show(app);
+        }
+        return Ok(());
+    }
+    memo_win_create(app, visible)
+}
+
+/// 创建备忘小窗。Windows 上从命令线程(入口点击/设置钩子)同步建 WebView2 窗会得到
+/// 死渲染管线(白屏+X失灵,WidgetWin_0 停在 0x0),因此运行期一律不直接建窗:
+/// 启动时预建(restore=false 也建,隐藏),运行期只 show/hide。
+fn memo_win_create(app: &tauri::AppHandle, visible: bool) -> Result<(), String> {
+    let s = load_settings(&settings_file(app));
     let mut builder = tauri::WebviewWindowBuilder::new(
         app,
         MEMO_WIN_LABEL,
@@ -1499,7 +1518,8 @@ fn memo_win_show(app: &tauri::AppHandle) -> Result<(), String> {
     )
     .title("备忘录")
     .min_inner_size(240.0, 320.0)
-    .always_on_top(s.memo_win_top);
+    .always_on_top(s.memo_win_top)
+    .visible(visible);
     // 记忆的位置必须还落在某个显示器上(副屏拔掉等情况回退默认),避免小窗"消失"
     let rect_on_screen = |r: &Vec<i64>| -> bool {
         app.available_monitors()
@@ -1568,14 +1588,22 @@ fn memo_win_hide(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// 备忘录入口点击(窗口模式):可见→隐藏,不可见→创建/显示
+/// 备忘录入口点击(窗口模式):可见→隐藏,不可见→显示(正常情况启动已预建)
 #[tauri::command]
 fn memo_win_toggle(app: tauri::AppHandle) -> Result<bool, String> {
     if memo_win_visible(&app) {
         memo_win_hide(&app)?;
         Ok(false)
-    } else {
+    } else if app.get_webview_window(MEMO_WIN_LABEL).is_some() {
         memo_win_show(&app)?;
+        Ok(true)
+    } else {
+        // 兜底:窗口不存在时延迟到命令返回后再建,避免命令线程建出死 webview
+        let h = app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            let _ = memo_win_show(&h);
+        });
         Ok(true)
     }
 }
@@ -1630,7 +1658,18 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Settings 
             let _ = memo_win_hide(&app);
         }
     } else if !old_enabled || old_mode != "window" {
-        let _ = memo_win_show(&app);
+        if app.get_webview_window(MEMO_WIN_LABEL).is_some() {
+            let _ = memo_win_show(&app);
+        } else {
+            // 命令线程直接建窗会得到死 webview,延迟到命令返回后建(同 boot 路径)
+            let h = app.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+                if let Err(e) = memo_win_show(&h) {
+                    eprintln!("[memo-win] runtime create FAILED: {e}");
+                }
+            });
+        }
     }
     let _ = app.emit("settings-changed", ());
     s
@@ -2104,19 +2143,22 @@ pub fn run() {
         .setup(|app| {
             apply_app_icon_on_startup(app.handle());
             maybe_auto_update_holidays(app.handle());
-            // 备忘小窗:开启"启动时恢复"才随启动弹出(默认关)
+            // 备忘小窗:窗口模式下启动即预建(restore=false 也建,隐藏),
+            // 避免运行期点击入口时才建窗(Windows 上命令线程建 WebView2 会白屏+X失灵)
             let s = load_settings(&settings_file(&app.handle()));
             eprintln!(
                 "[memo-win] boot cond: enabled={} mode={} restore={}",
                 s.memo_enabled, s.memo_display_mode, s.memo_win_restore
             );
-            if s.memo_enabled && s.memo_display_mode == "window" && s.memo_win_restore {
+            if s.memo_enabled && s.memo_display_mode == "window" {
+                let visible = s.memo_win_restore;
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(400));
-                    match memo_win_show(&h) {
-                        Ok(()) => eprintln!("[memo-win] boot show ok"),
-                        Err(e) => eprintln!("[memo-win] boot show FAILED: {e}"),
+                    let what = if visible { "show" } else { "precreate-hidden" };
+                    match memo_win_ensure(&h, visible) {
+                        Ok(()) => eprintln!("[memo-win] boot {what} ok"),
+                        Err(e) => eprintln!("[memo-win] boot {what} FAILED: {e}"),
                     }
                 });
             }
