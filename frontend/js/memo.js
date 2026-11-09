@@ -28,9 +28,15 @@ const Memo = {
     try {
       const data = await API.listMemos();
       this.entries = data.entries || [];
+      this._loadError = null;
     } catch (e) {
       console.warn('list_memos failed:', e);
-      this.entries = [];
+      const message = window.__tauriErrMsg(e);
+      if (this._loadError !== message) {
+        this._loadError = message;
+        await Main.alertAction({ title: '备忘录加载失败', message });
+      }
+      return;
     }
     this.render();
   },
@@ -467,6 +473,7 @@ const Memo = {
       let targetIdx = this.entries.findIndex(x => x.id === target.dataset.id);
       if (!before) targetIdx += 1;
       if (targetIdx > dragIdx) targetIdx -= 1;
+      const previous = this.entries;
       const next = this.entries.slice();
       const [moved] = next.splice(dragIdx, 1);
       next.splice(targetIdx, 0, moved);
@@ -476,6 +483,8 @@ const Memo = {
         const data = await API.reorderMemos(next.map(x => x.id));
         this.entries = data.entries || [];
       } catch (err) {
+        this.entries = previous;
+        this.render();
         await Main.alertAction({ title: '保存失败', message: '排序保存失败:' + window.__tauriErrMsg(err) });
       }
       this.render();

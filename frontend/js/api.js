@@ -8,6 +8,47 @@ function tauriErrMsg(e) {
 }
 window.__tauriErrMsg = tauriErrMsg;
 
+// Startup cannot use Main's confirmation dialog before its events are bound.
+window.showStorageStartupError = function (error) {
+  const mask = document.createElement('div');
+  mask.className = 'modal-mask';
+  mask.style.zIndex = '99999';
+  const modal = document.createElement('div');
+  modal.className = 'modal';
+  modal.style.padding = '24px';
+  const title = document.createElement('h3');
+  title.textContent = '无法加载设置';
+  const message = document.createElement('p');
+  message.style.whiteSpace = 'pre-wrap';
+  message.textContent = tauriErrMsg(error) + '\n原文件未被重置。请检查文件或从备份恢复，然后重试。';
+  const retry = document.createElement('button');
+  retry.className = 'btn primary';
+  retry.textContent = '重新加载';
+  retry.onclick = () => location.reload();
+  const open = document.createElement('button');
+  open.className = 'btn';
+  open.textContent = '打开数据目录';
+  open.onclick = async () => {
+    try { await API.openDataDir(); }
+    catch (e) { message.textContent = tauriErrMsg(e); }
+  };
+  const restore = document.createElement('button');
+  restore.className = 'btn';
+  restore.textContent = '从完整备份恢复';
+  restore.onclick = async () => {
+    try {
+      const path = await API.pickOpenPath();
+      if (!path) return;
+      if (!await dialog.confirm('将覆盖任务、备忘录和设置，恢复前会保留当前文件副本。确定继续？', { title: '恢复完整备份', kind: 'warning' })) return;
+      await API.restoreBackup(path);
+      location.reload();
+    } catch (e) { message.textContent = tauriErrMsg(e); }
+  };
+  modal.append(title, message, open, restore, retry);
+  mask.append(modal);
+  document.body.append(mask);
+};
+
 const API = {
   // ===== Todos =====
   async list() {
@@ -20,8 +61,8 @@ const API = {
   async update(id, body) {
     return await invoke('update_todo', { id, patch: body });
   },
-  async moveTodo(id, parentId, index) {
-    return await invoke('move_todo', { id, parentId, index });
+  async moveTodo(id, parentId, index, groupId) {
+    return await invoke('move_todo', { id, parentId, index, groupId: groupId ?? null, changeGroup: groupId !== undefined });
   },
   async remove(id) {
     return await invoke('delete_todo', { id });
@@ -54,9 +95,9 @@ const API = {
   async getSettings() {
     return await invoke('list_settings');
   },
-  // saveSettings 传整个 settings 对象,后端按 patch merge 即等于覆盖
-  async saveSettings(settings) {
-    return await invoke('update_settings', { patch: settings });
+  // 兼容别名；仅提交本次变更字段，避免覆盖其他窗口的新设置
+  async saveSettings(patch) {
+    return await invoke('update_settings', { patch });
   },
   async resetSettings() {
     return await invoke('reset_settings');
@@ -91,12 +132,17 @@ const API = {
   async importJson(data) {
     return await invoke('replace_data', { data });
   },
-  async importDataFromPath(path) {
-    return await invoke('import_data', { path });
+  async inspectImport(path) {
+    return await invoke('inspect_import', { path });
+  },
+  async importDataFromPath(path, expectedScope) {
+    return await invoke('import_data', { path, expectedScope });
   },
   async openDataDir() {
     return await invoke('open_data_dir');
   },
+  async exportBackup(path) { return await invoke('export_backup', { path }); },
+  async restoreBackup(path) { return await invoke('restore_backup', { path }); },
   async getDataDir() {
     return await invoke('get_data_dir');
   },

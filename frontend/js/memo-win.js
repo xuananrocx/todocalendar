@@ -74,9 +74,10 @@
   window.Main = {
     state,
     async patchSettings(patch) {
-      Object.assign(state.settings, patch);
+      const saved = await API.updateSettings(patch);
+      state.settings = saved;
       applyTheme();
-      return await API.updateSettings(patch);
+      return saved;
     },
     confirmAction(opt) { return memoWinConfirm(opt); },
     alertAction(opt) { return memoWinConfirm({ confirmText: '知道了', hideCancel: true, title: '提示', ...opt }); },
@@ -139,7 +140,8 @@
       });
       Memo.windowMode = true;
       Icon.render(document.body);
-      try { state.settings = await API.getSettings(); } catch { state.settings = {}; }
+      try { state.settings = await API.getSettings(); }
+      catch (e) { window.showStorageStartupError(e); return; }
       applyTheme();
 
       const pinBtn = document.getElementById('btnMemoWinPin');
@@ -163,6 +165,7 @@
     }
     try {
       const { listen } = window.__TAURI__.event;
+      await listen('storage-error', (event) => Main.alertAction({ title: '数据操作失败', message: event.payload }));
       await listen('memos-changed', () => Memo.load());
       await listen('settings-changed', async () => {
         try { state.settings = await API.getSettings(); } catch { return; }

@@ -1,0 +1,227 @@
+# TodoCalendar 项目交接文档
+
+> **2026-11-09 工作区修复补充（待 owner 验收，未发版）**
+>
+> 当前开发分支为 `xuanan/fix-data-integrity`，下文的 v0.4.54 / `1a6c554` 描述保留为历史基线。当前工作区已增加 `src-tauri/src/storage.rs`（原子写入、错误返回、进程内事务锁）、`backup.rs`（完整备份、每日自动备份、恢复回滚日志）和 `validation.rs`（任务关系校验）。文件损坏不再作为空数据处理，启动读取设置失败不再重置文件。
+>
+> 父任务时间同步已覆盖删除、拖拽、编辑换父级、移入分组；没有可用子任务时间时保留父任务原时间。主窗口设置按字段提交；小窗位置使用物理桌面坐标，兼容旧逻辑坐标；关闭兜底已补充 hide 权限。
+>
+> **数据导出包含待办、分组、归档和备忘录，不包含设置；旧版任务 JSON 导入保留备忘录和设置**；完整备份包含任务、备忘录和设置。自动备份默认关闭，开启后每天首次修改前保存，默认保留 5 份。导入/恢复前副本不参与自动轮换。完整恢复失败会回滚；异常中断的 `restore-pending.json` 会在下一次数据事务前用于恢复原文件。
+>
+> 验证入口：`powershell -ExecutionPolicy Bypass -File scripts/start-review.ps1`，每次生成全新 `com.todocalendar.dev.review-*` 标识，不读取安装版或已有开发版数据。常规开发仍用 `dev.bat`（已固定 CLI 2.11.4）；Debug 构建拒绝访问正式标识。本轮修复已获用户授权提交；不自动 push、打包或安装。
+>
+> 测试：`cargo test --manifest-path src-tauri/Cargo.toml --locked --offline` 与 `node --test scripts/storage-errors.test.cjs`。自动化测试不代表多屏和桌面交互已通过人工验收。
+
+
+> 更新时间:2026-11-06。当前版本 **v0.4.54**(已热修,见 §10)。交接前请通读 §7(构建发版)与 §9(坑清单),这两节是踩坑换来的。
+
+---
+
+## 1. 项目概览
+
+- **是什么**:极简、本地优先(local-first)的 Windows 桌面「日历 + 待办」应用,纯单机、无账号无后端。
+- **形态**:Tauri 2 桌面应用(Rust 后端 + 原生 HTML/CSS/JS 前端,无前端框架、无构建步骤)。
+- **核心功能**:月视图日历(农历/周数/节假日自动更新)、无限嵌套子任务、拖拽排序、批量创建(粘贴缩进文本)、自定义分组、优先/搁置、归档、搜索、统计条、主题系统(跟随系统/多配色/玻璃强度)、数据导出导入与自动备份、**备忘录**(v0.4.54 新增,侧边分栏左/右可选、迷你卡片、独立窗口三种显示方式,默认关闭)。
+- **唯一目标平台**:Windows x64 WebView2。README 里图标目录有 android 子目录,但从未配置移动端构建,别被误导。
+
+## 2. 仓库信息
+
+| 项 | 值 |
+|---|---|
+| 远端 | `https://github.com/xuananrocx/todocalendar.git` (origin) |
+| 分支 | 只有 `main`,单人开发模式 |
+| 当前 HEAD | `1a6c554` fix: 备忘独立窗口白屏/X失灵——启动时预建小窗 |
+| 上一功能 commit | `e443f16` feat: 备忘录功能 |
+| 本地 git config | **未配置** user.name/email,commit 必须内联:`git -c user.name='xuananrocx' -c user.email='xuananrocx@users.noreply.github.com' commit -m "..."`(否则报 Committer identity unknown) |
+| Tag 策略 | v0.4.34 之后**本地不打 tag**,发版用 `gh release create vX.Y.Z` 自动建远端 tag。本地 `git describe` 只到 v0.4.34 属正常 |
+| 工作区未入库文件 | 根目录及 frontend/ 下的 `*_preview.html`、`icon_preview_*`、`palette_*.png`、`design/` 目录——都是历次视觉方案的 mockup 残留,留着参考,不入库 |
+| 许可 | 见 LICENSE |
+
+## 3. 技术栈与版本(锁定的关键版本别乱升)
+
+| 组件 | 版本 | 备注 |
+|---|---|---|
+| Tauri (Rust crate) | **2.11.5** (Cargo.lock 锁定) | features: image-png |
+| Tauri CLI | **@tauri-apps/cli@2.11.4** | 打包用这个精确版本;@latest 能用但会多报 `__TAURI_BUNDLE_TYPE__` 警告 |
+| Rust | stable, rustup 管理 (`~/.rustup`) | edition 2021;release 配置 panic=abort + lto + strip + opt-level=s |
+| Node | v24 | 只为跑 npx CLI;前端本身零依赖零构建 |
+| tauri-plugin-dialog | 2.x | 唯一 Tauri 插件(另 fs 是间接依赖) |
+| 其他 Rust deps | serde/serde_json、uuid(v4)、chrono、reqwest(0.12, rustls-tls,节假日联网更新用)、windows-sys 0.59 | |
+| WebView2 | 系统安装版 | 数据/缓存目录见 §5 |
+
+**版本号位置**:改版本要同时改 `src-tauri/Cargo.toml` 的 `version` 和 `src-tauri/tauri.conf.json` 的 `version`(历史上有过只改一边导致 Cargo.lock 滞后的 commit `020ed36`,两处都改再 build)。`package.json` 的 0.1.0 是装饰性的,可不管。
+
+## 4. 目录结构导览
+
+```
+TodoCalendarTauri/
+├── dev.bat                    # 开发启动入口(见 §6)
+├── tauri.dev.conf.json        # dev 覆盖配置:identifier=com.todocalendar.dev,实现 dev 数据隔离
+├── package.json               # 仅 devDependency: @tauri-apps/cli
+├── src-tauri/
+│   ├── tauri.conf.json        # 主配置(identifier=com.todocalendar.app, NSIS 自定义模板/中文语言)
+│   ├── Cargo.toml / Cargo.lock
+│   ├── src/lib.rs             # ★ 全部 Rust 后端,单文件 ~2450 行
+│   ├── capabilities/default.json  # ⚠ windows 数组=["main","memo"],新增动态窗口必须把 label 加进来(见 §9)
+│   ├── nsis/installer.nsi     # 自定义安装模板(检测旧版/覆盖升级文案)
+│   ├── nsis/languages/SimpChinese.nsh  # 自定义中文翻译
+│   ├── icons/                 # 多套应用图标(a1/a2/b),运行时可切换(appIcon 设置)
+│   ├── resources/holidays.json
+│   └── target/.tauri/NSIS/    # 本地化的 NSIS 工具链(useLocalToolsDir,见 §7;target 不入库)
+├── frontend/                  # ★ 前端无构建,改完即生效(dev 模式)
+│   ├── index.html             # 主窗口(628 行,含设置面板 DOM)
+│   ├── memo.html              # 备忘独立小窗页面
+│   ├── css/style.css          # 全部样式 ~3400 行
+│   ├── js/
+│   │   ├── main.js            # 主窗口逻辑 ~3800 行(设置面板、日历交互、命令调用)
+│   │   ├── render.js          # 渲染层 ~1900 行
+│   │   ├── memo.js            # 备忘录核心(三模式共用),独立小窗下 windowMode=true
+│   │   ├── memo-win.js        # 独立小窗专属(X 关闭接管、置顶、boot 探针)
+│   │   ├── api.js             # invoke 封装
+│   │   ├── icons.js           # 图标渲染(⚠ 图标名不能与组件同名,会无限递归 OOM)
+│   │   └── lib/lunar.min.js   # 农历库(vendor)
+│   └── vendor/ assets/ icons/
+├── scripts/gen_icons.py       # 图标批量生成
+├── tools/make_icon.py
+├── docs/screenshots/
+└── design/ + *_preview.html   # 未入库的视觉 mockup 残留
+```
+
+### lib.rs 关键结构(后端导览)
+
+- **数据层**:`load_data/save_data`(todos.json)、`load_memos/save_memos`(memos.json)、`load_settings/save_settings`(settings.json);所有 load 都是"文件不存在/损坏→返回默认值",不会崩。
+- **设置**:`Settings` struct 字段与前端 settings 面板一一对应(camelCase 序列化);`update_settings` 命令做 patch 合并,**并带备忘小窗联动逻辑**(§8 的修法就动了这里)。
+- **备忘小窗**:`memo_win_create/memo_win_ensure/memo_win_show/memo_win_hide/memo_win_toggle/memo_win_save_rect`,label 常量 `MEMO_WIN_LABEL = "memo"`。
+- **节假日**:`maybe_auto_update_holidays` 启动检查更新(reqwest + 代理注意),`list_holidays/check_holiday_updates`。
+- **诊断**:`diag_log` 命令——前端 `diag(msg)` → dev 日志/被重定向的 stderr 打 `[diag] ...`,排障利器,别删。
+- **命令注册**:`.invoke_handler(tauri::generate_handler![...])` 里是全部命令清单(~2130 行处)。
+- **setup 闭包**(~2147 行):应用图标应用、节假日更新、**备忘小窗启动预建**(v0.4.54 热修的核心,见 §8)。
+- 代码里有少量中文注释解释非显然的坑(事件线程自锁、坐标过滤等),改动相关区域前先读注释。
+
+## 5. 运行时数据与文件位置(Windows)
+
+| 内容 | 路径 |
+|---|---|
+| 安装位置(本机) | `D:\application\TodoCalendar\`(NSIS 装的,含 uninstall.exe) |
+| **用户真实数据** | `%APPDATA%\Roaming\com.todocalendar.app\` → `todos.json` / `memos.json` / `settings.json` / `holidays_cache.json` |
+| WebView2 缓存 | `%LOCALAPPDATA%\com.todocalendar.app\EBWebView\`(数据在 Roaming,删缓存不丢数据) |
+| dev 模式数据 | 同结构但 identifier 为 `com.todocalendar.dev`,与正式版**完全隔离**(这是 2026-11-05 明确要求"不要动我数据"后建立的) |
+| 数据安全 | ① 备份:设置里有 autoBackup(默认关);② **任何 dev/调试严禁指向 com.todocalendar.app**;③ 强杀进程可能打断 settings.json 写入→文件半写→下次启动设置回默认(假性"数据丢失",见 §9) |
+
+## 6. 开发流程
+
+```bat
+:: 双击仓库根目录 dev.bat,或:
+npx --yes @tauri-apps/cli@latest dev --config tauri.dev.conf.json
+```
+
+- **必须带 `--config tauri.dev.conf.json`**(dev.bat 已带),否则 dev 实例直接读写正式版数据目录。
+- dev 页面走 `http://127.0.0.1:1430` 本地服务:**改纯前端文件会热生效,但 tauri 的 watcher 只盯 src-tauri**——改完前端后 `touch src-tauri/src/lib.rs` 强制重启最稳。
+- 前端无打包无 TS 无 lint;后端验证用 `cargo check`(在 src-tauri/ 下)。
+- **改 `.py` 之外的辅助脚本**(gen_icons.py)重新生成图标后,记得把产物加进 `src-tauri/icons/` 并在 tauri.conf.json `bundle.resources` 登记新文件名。
+
+## 7. 构建、发版完整流程(照抄模板,别拆步骤)
+
+### 7.1 构建 NSIS
+
+```bash
+cd "F:/CodePilot/TodoCalendarTauri" && \
+export USERPROFILE="C:\Users\xuanan" HOME="C:\Users\xuanan" \
+       RUSTUP_HOME="C:\Users\xuanan\.rustup" \
+       LOCALAPPDATA="C:\Users\xuanan\AppData\Local" \
+       APPDATA="C:\Users\xuanan\AppData\Roaming" \
+       CI=false && \
+npx --yes @tauri-apps/cli@2.11.4 build --bundles nsis
+```
+
+- 耗时 ~2.5 分钟。产物:`src-tauri/target/release/bundle/nsis/TodoCalendar_X.Y.Z_x64-setup.exe`。
+- **为什么 export 这些**:这串环境变量是 AI 终端(harness/bash)把 USERPROFILE 指向临时目录时防止 `dirs::cache_dir()` 返回 None → tauri-bundler 在 `nsis/mod.rs:85` unwrap panic 的保命符——同一个坑踩过 3 次。**普通 CMD/PowerShell 直接构建不需要 export**,但把模板整段照抄永远无害。环境变量不跨命令持久,必须和 build 同一条命令。
+- `tauri.conf.json` 已配 `"useLocalToolsDir": true`,NSIS 工具链从 `src-tauri/target/.tauri/NSIS/` 取(不入库,新机器首次构建自动重新下载到该目录)。
+- 只打 `--bundles nsis`,**不打 msi**(易 panic,历史结论)。
+- 需要 `gh`(GitHub CLI,已登录 xuananrocx)与 git push 时走代理 `127.0.0.1:7897`(github 访问)。
+
+### 7.2 发版步骤(用户明说"发版"才执行)
+
+1. `git push origin main`
+2. `gh release create vX.Y.Z <setup.exe绝对路径> --title "vX.Y.Z" --notes "..."`
+   (近期不本地打 tag,远端 tag 由 gh 自动创建)
+3. **替换已发版本的安装包**(热修场景,2026-11-06 实操):
+   `gh release upload vX.Y.Z <setup.exe> --clobber` ——只换附件,**绝不动 Release 描述**。
+4. push 被拒(远端有网页上改的 README 等):`git pull --rebase origin main` 再 push;若之前建过 tag 要删旧重打。
+5. 覆盖整条 Release 的旧做法:`gh release delete vX.Y.Z --yes --cleanup-tag` 后重建(需要保留原 notes 原文)。
+
+### 7.3 发版前自查清单
+
+1. ☐ 版本号两处(Cargo.toml + tauri.conf.json)都改了?
+2. ☐ 环境变量与 build 在**同一条命令**里?
+3. ☐ 报 `panicked at nsis/mod.rs:85` = 100% 环境变量缺失,别查别的,重跑模板。
+4. ☐ 本地实测:先跑裸 exe(`target/release/todocalendar.exe`,PowerShell `Start-Process -RedirectStandardError <file>` 可抓 GUI exe 的 eprintln 日志),再 `powershell Start-Process <setup.exe> -ArgumentList '/S' -Wait` 静默装一遍验证升级。
+5. ☐ **静默安装别在 git-bash 直接传 `/S`**:MSYS 会把 `/S` 改写成 `S:/`,安装器弹 GUI 卡死。用 PowerShell Start-Process。
+6. ☐ 静默安装前先温和关闭正在运行的实例(CloseMainWindow;不行再 Stop-Process——强杀有 settings.json 半写风险)。
+7. ☐ 重传安装包时 Release notes 保留原文(用户明确要求过)。
+
+## 8. v0.4.54 备忘录功能 & 白屏热修(最新上下文,必读)
+
+**功能**(commit `e443f16`):备忘录默认关闭,设置里开启;三种显示方式——侧边分栏(左/右可选 `memoSidePosition`)、迷你卡片(置顶贴边)、独立窗口(`memo_win_*` 系列,可置顶、位置尺寸记忆、可选启动恢复 `memoWinRestore` 默认关);正文 URL 自动识别为链接;独立 `memos.json` 存储;拖拽排序。
+
+**热修**(commit `1a6c554`,2026-11-06):独立窗口"白屏 + X 关不掉"的根因是 **Windows 上从命令线程(入口点击/设置钩子)同步 `WebviewWindowBuilder.build()` 会得到死渲染管线**(WebView 子窗口停在 0x0、页面 JS 全死→X 无人应答),与缓存损坏无关。修法:
+- 窗口模式下**启动即预建小窗**(restore 关闭时 `.visible(false)` 隐藏预建,页面 JS 在隐藏态照常 boot);
+- 运行期一律只 show/hide,绝不现场建窗;
+- 兜底建窗(理论上到不了)也走 `std::thread::spawn + sleep 400ms` 延迟线程(与启动路径同款,实测健康)。
+- v0.4.54 的 GitHub 安装包已用 `--clobber` 替换为修复版(16:40 构建),Release 描述未动;本机已静默升级。
+- 未做的可选硬化:Rust 侧 watchdog 检测死 webview 自动销毁重建(用户未要求,别擅自加)。
+
+## 9. 硬核坑清单(每条都真金白银踩过)
+
+### Tauri/WebView2 行为
+1. **运行期建窗=死 webview**:见 §8。任何新动态窗口都要"启动预建、运行期 show/hide"。
+2. **窗口事件回调里禁止同步调窗口方法**(outer_position/hide 等):回调在事件循环线程,同步调用派回同一线程→**自锁死**,必须 `std::thread::spawn`。
+3. **运行时创建的窗口点 X 只走页面 JS `onCloseRequested`**,Rust 侧 `on_window_event` 收不到;且全局 `Builder::on_window_event` 对动态窗口不生效,必须在窗口实例上 `w.on_window_event(...)` 挂。JS 关闭处理器要注册在 boot **最前面**。
+4. **`tauri-plugin-dialog` 接管 `window.alert/confirm`** 变系统原生样式;应用内提示统一用 `Main.alertAction()`(confirmAction + hideCancel)。
+5. **capabilities 的 windows 数组必须包含所有动态窗口 label**(现为 `["main","memo"]`),漏了该窗口所有 invoke 被拒(症状:小窗按钮全没反应)。
+6. **窗口创建瞬间可能读到停放坐标 [-18286,-18286,0,0]**,落库前要过滤;备忘小窗还有"记忆位置必须落在某显示器上"的校验(副屏拔掉回退默认位)。
+7. **外部 ShowWindow 会造成 tao 可见性状态失同步**:`.visible(false)` 创建的窗被外部脚本 SW_SHOW 后,tao 仍记"隐藏",`w.hide()` 被当冗余跳过(藏不掉但日志报 ok)。无头测试 X 路径要用 tao 自己 show 出来的窗。
+8. **WebView2 白屏自愈**:EBWebView 缓存损坏(dev 进程被强杀后偶发)→ 删 `%LOCALAPPDATA%\<identifier>\EBWebView`(数据在 Roaming 不受影响)。鉴别:窗口缺 `Chrome_RenderWidgetHostHWND` 子窗口=渲染管线没建,与前端代码无关。
+9. invoke 调用建议带 `Promise.race` 超时降级(memo-win.js 的 hideMemoWin 是范例:2.5s 超时→JS 原生 `getCurrentWindow().hide()` 兜底)。
+
+### Windows/工具链
+10. **MSYS 路径转换**:git-bash 里 `taskkill /PID`、安装器 `/S` 都会被改写,统一用 PowerShell 脚本;内联 PowerShell 的 `$var` 会被 bash 吃掉——**写成 .ps1 文件再执行**。
+11. **中文 .ps1 必须 UTF-8 带 BOM**,否则 PS5.1 按 GBK 读崩;C# 源码里别放中文字符串(比较逻辑用 class+非空 title 等纯 ASCII 条件替代)。
+12. **强杀进程(Stop-Process -Force)可能打断 settings.json 写入**→半写损坏→下次启动设置回默认(假性数据丢失)。
+13. PowerShell 枚举窗口用静态 C# 方法(PS 5.1 lambda→委托转换会失败);GUI 子系统 exe 的 stderr 可用 `Start-Process -RedirectStandardError` 捕获。
+
+### 发版/构建
+14. build 环境变量缺失→`nsis/mod.rs:85` panic(§7 详解,踩过 3 次)。
+15. **NSIS 中文化必须配 `customLanguageFiles`**:`nsis.languages` 只是声明,翻译文件要显式指定到 `./nsis/languages/SimpChinese.nsh`,否则静默回退默认翻译(修复在 commit `8e90055`)。
+16. 本机没有 `cargo-tauri` 子命令,必须 `npx --yes @tauri-apps/cli@...`。
+17. grep 编译进 exe 的 JS 字符串不可靠(资产压缩);dev 模式前端改动走 1430 端口热生效。
+
+## 10. 版本史速览
+
+| 版本 | 日期 | 要点 |
+|---|---|---|
+| v0.4.54 | 2026-11-06 | 备忘录功能(默认关);当天热修独立窗口白屏/X失灵(安装包已替换,Release 描述未动) |
+| v0.4.53 | 2026-09-15 | 版本整理 |
+| v0.4.51 | 2026-09-03 | 完成勾选框几何画法、顶栏间距、归档搜索修复 |
+| v0.4.49 | 2026-09-01 | 搁置置灰开关 |
+| v0.4.45 | 2026-08-20 | useLocalToolsDir 规避打包 cache_dir 问题 |
+| v0.4.34 | 2026-08-19 | (最后一个本地打 tag 的版本) |
+
+完整历史:`git log --oneline`;发版差异:`git log v0.4.54..HEAD`。
+
+## 11. 与项目 owner 的协作约定(重要)
+
+1. **改完代码不要立刻 commit**——留在工作区等 owner 实测,确认"没问题"后才 commit(未测试代码进 git 历史被明确批评过)。commit 后要告知:改了什么 + 未 push 的 commit 数。
+2. **commit 后不要主动 push/打 tag/打包**,等明确说"发版/push/发新版本"。
+3. **重传安装包必须保留 Release 原描述**(用户原话"版本描述为啥要替换,这个保持原来的四点就好")。
+4. dev 必须走隔离 identifier,严禁动正式版数据目录(用户原话"不要动我数据")。
+5. 视觉类新功能先出 HTML mockup 给用户看过再实现(工作区里那些 preview 文件就是这流程的产物);方案被否决的功能(如图标方向开关)不要复活,先问。
+6. 网络受限地址(github 等)走本机代理 127.0.0.1:7897(或 1080)。
+
+## 12. 接手建议路线
+
+1. `git clone` → 装好 Node LTS + Rust stable → 双击 dev.bat 跑起来熟悉界面。
+2. 读 `src-tauri/src/lib.rs` 的命令注册清单 + `frontend/js/main.js` 设置面板,建立"设置项=Settings 字段=UI 控件"的映射感。
+3. 试一轮完整发版演练(§7):build → 裸 exe 测 → 静默装(可发个测试版本号到自己 fork)。
+4. 改任何动态窗口/关闭逻辑前,重读 §8、§9.1-9.3。
+5. 有不确定的设计意图(比如某设置为什么默认关),先问 owner,别猜。

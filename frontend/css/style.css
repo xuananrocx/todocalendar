@@ -2407,6 +2407,21 @@ mark.history-hl {
 }
 .btn-secondary:hover { background: var(--hover-bg); }
 
+/* 数据设置沿用通用卡片，成对操作等宽，文字与控件统一沿卡片内边距对齐。 */
+.settings-data-path { overflow-wrap: anywhere; line-height: 1.6; }
+.settings-data-copy { font-size: 11px; color: var(--muted); line-height: 1.7; }
+.settings-data-group .settings-data-actions {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px;
+  padding-bottom: 16px;
+}
+.settings-data-actions .btn-secondary {
+  justify-content: center; min-height: 34px; padding: 7px 10px;
+}
+.settings-data-actions .btn-secondary svg { flex-shrink: 0; }
+.settings-data-retention { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-data-retention .settings-row-label { margin-bottom: 0; }
+.settings-data-retention .number-setting { flex-shrink: 0; font-size: 12px; }
+
 /* ===== 主题: 深色 ===== */
 [data-theme="dark"] {
   color-scheme: dark;

@@ -155,7 +155,8 @@ const Main = {
       this.state.settings = await API.getSettings();
     } catch (e) {
       console.error('load settings failed:', e);
-      this.state.settings = await API.resetSettings();
+      window.showStorageStartupError(e);
+      return;
     }
     // 拉数据目录路径(独立 command,不持久化)
     try { this.state.dataDir = await API.getDataDir(); } catch (e) { console.warn('getDataDir failed:', e); }
@@ -170,15 +171,16 @@ const Main = {
     await this.checkArchiveDue();
     this.watchSystemTheme();
     this.startClock();
+    try {
+      await window.__TAURI__.core.invoke('diag_log', { msg: `main-ready todos=${this.state.todos.length} memos=${Memo.entries.length}` });
+    } catch (e) { console.warn('startup diagnostic failed:', e); }
   },
 
   async reload() {
     try {
       const data = await API.list();
       this.state.todos = data.todos || [];
-      try {
-        this.state.groups = await API.listGroups();
-      } catch (e) { console.warn('listGroups failed:', e); this.state.groups = []; }
+      this.state.groups = data.groups || [];
       try {
         this.state.holidays = await window.__TAURI__.core.invoke('list_holidays');
       } catch (e) { console.warn('list_holidays failed:', e); this.state.holidays = {}; }
@@ -201,6 +203,7 @@ const Main = {
       }
     } catch (e) {
       console.error('auto archive failed:', e);
+      alert('自动归档失败:' + window.__tauriErrMsg(e));
     } finally {
       this.state.archiveCheckPending = false;
     }
@@ -220,7 +223,9 @@ const Main = {
   // 跨窗口事件:备忘小窗的增删改同步主窗口数据;任一窗口改设置后同步本地状态
   listenCrossWindowEvents() {
     const { listen } = window.__TAURI__.event;
+    listen('storage-error', (event) => this.alertAction({ title: '数据操作失败', message: event.payload }));
     listen('memos-changed', () => Memo.load());
+    listen('todos-changed', () => this.reload());
     listen('settings-changed', async () => {
       try { this.state.settings = await API.getSettings(); } catch { return; }
       this.applySettingsToDom();
@@ -1171,6 +1176,7 @@ const Main = {
         if (t) Object.assign(t, updated);
         Render.renderAll(this.state);
       }
+      if ('startTime' in patch || 'endTime' in patch || 'parentId' in patch) await this.reload();
       if ('done' in patch) await this.checkArchiveDue();
     } catch (e) {
       alert('保存失败:' + window.__tauriErrMsg(e));
@@ -1361,8 +1367,7 @@ const Main = {
     Render.renderAll(this.state);
 
     try {
-      if (groupChanged) await API.setTodoGroup(id, targetGroupId);
-      const data = await API.moveTodo(id, parentId, index);
+      const data = await API.moveTodo(id, parentId, index, targetGroupId);
       this.state.todos = data.todos || [];
       Render.renderAll(this.state);
     } catch (e) {
@@ -1478,7 +1483,13 @@ const Main = {
   },
 
   // ===== Settings 保存 =====
-  async patchSettings(patch) {
+  patchSettings(patch) {
+    const next = (this._settingsSaveQueue || Promise.resolve()).then(() => this._applySettingsPatch({ ...patch }));
+    this._settingsSaveQueue = next.catch(() => {});
+    return next;
+  },
+
+  async _applySettingsPatch(patch) {
     const before = JSON.parse(JSON.stringify(this.state.settings));
     const groupsToggled = 'enableGroups' in patch && patch.enableGroups !== !!before.enableGroups;
     // 备忘录:重新启用或切入某显示方式时重置展开状态,否则收起后从设置界面无法唤回
@@ -1490,7 +1501,10 @@ const Main = {
     this.refreshDropdownValues();
     Render.renderAll(this.state);
     try {
-      await API.saveSettings(this.state.settings);
+      this.state.settings = await API.updateSettings(patch);
+      this.applySettingsToDom();
+      this.refreshDropdownValues();
+      Render.renderAll(this.state);
       if (groupsToggled) {
         await this.reload();
         return;
@@ -2394,22 +2408,44 @@ const Main = {
       return `
         <div class="settings-content-title">数据</div>
         <div class="settings-content-desc">数据备份与维护</div>
-        <div class="settings-row">
-          <div class="settings-row-label">数据文件位置</div>
-          <div class="settings-row-desc" style="word-break:break-all">${this.state.dataDir || '(未知)'}</div>
+        <div class="settings-group settings-data-group">
+          <div class="settings-section-title">本地数据</div>
+          <div class="settings-row">
+            <div class="settings-row-label">数据文件位置</div>
+            <div class="settings-row-desc settings-data-path">${this.state.dataDir || '(未知)'}</div>
+          </div>
+          <div class="settings-row settings-data-actions">
+            <button class="btn-secondary" data-action="openDataDir"><i data-icon="folderOpen"></i> 打开数据目录</button>
+            <button class="btn-secondary" data-action="reloadData"><i data-icon="refresh"></i> 重新加载</button>
+          </div>
         </div>
-        <div class="settings-row">
-          <button class="btn-secondary" data-action="openDataDir"><i data-icon="folderOpen"></i> 打开数据目录</button>
-        </div>
-        <div class="settings-row">
-          <button class="btn-secondary" data-action="exportJson"><i data-icon="download"></i> 导出 JSON 备份</button>
-        </div>
-        <div class="settings-row">
-          <button class="btn-secondary" data-action="importJson"><i data-icon="upload"></i> 导入 JSON</button>
+        <div class="settings-group settings-data-group">
+          <div class="settings-section-title">数据导入与导出</div>
+          <div class="settings-row settings-data-copy">包含待办、分组、归档和备忘录，不含设置。兼容旧版任务 JSON，导入前自动保留恢复副本。</div>
+          <div class="settings-row settings-data-actions">
+            <button class="btn-secondary" data-action="exportJson"><i data-icon="download"></i> 导出数据 JSON</button>
+            <button class="btn-secondary" data-action="importJson"><i data-icon="upload"></i> 导入数据 JSON</button>
+          </div>
           <input type="file" id="importFile" accept=".json" hidden>
         </div>
-        <div class="settings-row" style="margin-top:20px">
-          <button class="btn-secondary" data-action="reloadData" style="color:var(--primary)"><i data-icon="refresh"></i> 重新加载(不修改文件)</button>
+        <div class="settings-group settings-data-group">
+          <div class="settings-section-title">完整备份与恢复</div>
+          <div class="settings-row settings-data-copy">包含任务、备忘录和设置。恢复将覆盖这三项；操作前保留恢复副本。</div>
+          <div class="settings-row settings-data-actions">
+            <button class="btn-secondary" data-action="exportBackup"><i data-icon="download"></i> 保存完整备份</button>
+            <button class="btn-secondary" data-action="restoreBackup"><i data-icon="upload"></i> 从完整备份恢复</button>
+          </div>
+        </div>
+        <div class="settings-group settings-data-group">
+          <div class="settings-section-title">自动备份</div>
+          <div class="settings-row">${this._toggle(!!s.autoBackup, 'autoBackup', '每日自动备份', '每天首次修改前保存完整快照，保存在数据目录的 backups 文件夹')}</div>
+          <div class="settings-row settings-data-retention">
+            <label class="settings-row-label" for="backupKeep">保留自动备份份数</label>
+            <div class="number-setting">
+              <input id="backupKeep" type="number" min="1" max="100" value="${Math.max(1, Math.min(100, Number(s.backupKeep) || 5))}">
+              <span>份</span>
+            </div>
+          </div>
         </div>
       `;
     }
@@ -2438,11 +2474,10 @@ const Main = {
     content.querySelectorAll('.segmented').forEach(seg => {
       const onChange = seg.dataset.onchange;
       seg.querySelectorAll('.segmented-opt').forEach(opt => {
-        opt.onclick = () => {
+        opt.onclick = async () => {
           const patch = {};
           patch[onChange] = opt.dataset.value;
-          Object.assign(s, patch);
-          this.patchSettings(patch);
+          await this.patchSettings(patch);
           this.renderSettingsModal();
         };
       });
@@ -2464,26 +2499,24 @@ const Main = {
 
     // palette picker
     content.querySelectorAll('.palette-swatch').forEach(sw => {
-      sw.onclick = () => {
+      sw.onclick = async () => {
         const picker = sw.closest('.palette-picker');
         const onChange = picker.dataset.onchange;
         const patch = {};
         patch[onChange] = sw.dataset.value;
-        Object.assign(s, patch);
-        this.patchSettings(patch);
+        await this.patchSettings(patch);
         this.renderSettingsModal();
       };
     });
 
     // color picker (theme color)
     content.querySelectorAll('.color-swatch').forEach(sw => {
-      sw.onclick = () => {
+      sw.onclick = async () => {
         const picker = sw.closest('.color-picker');
         const onChange = picker.dataset.onchange;
         const patch = {};
         patch[onChange] = sw.dataset.value;
-        Object.assign(s, patch);
-        this.patchSettings(patch);
+        await this.patchSettings(patch);
         this.renderSettingsModal();
       };
     });
@@ -2496,8 +2529,7 @@ const Main = {
         const value = sw.dataset.value;
         const patch = {};
         patch[onChange] = value;
-        Object.assign(s, patch);
-        this.patchSettings(patch);
+        await this.patchSettings(patch);
         try { await API.setAppIcon(value); } catch (e) { console.warn('set icon failed:', e); }
         this.renderSettingsModal();
       };
@@ -2506,12 +2538,11 @@ const Main = {
     // toggle
     content.querySelectorAll('.toggle').forEach(tg => {
       const onChange = tg.dataset.onchange;
-      tg.onclick = () => {
+      tg.onclick = async () => {
         if (tg.closest('.switch-row')?.classList.contains('disabled')) return;
         const patch = {};
-        patch[onChange] = !s[onChange];
-        Object.assign(s, patch);
-        this.patchSettings(patch);
+        patch[onChange] = !this.state.settings[onChange];
+        await this.patchSettings(patch);
         this.renderSettingsModal();
       };
     });
@@ -2535,6 +2566,12 @@ const Main = {
       if (icon && !icon.contains(e.relatedTarget)) icon.classList.remove('show');
     };
 
+    const backupKeep = content.querySelector('#backupKeep');
+    if (backupKeep) backupKeep.onchange = async () => {
+      const keep = Math.max(1, Math.min(100, Math.trunc(Number(backupKeep.value) || 5)));
+      backupKeep.value = String(keep);
+      await this.patchSettings({ backupKeep: keep });
+    };
     const archiveAfterDays = content.querySelector('#archiveAfterDays');
     if (archiveAfterDays) {
       archiveAfterDays.onchange = async () => {
@@ -2563,23 +2600,45 @@ const Main = {
         await API.openDataDir();
       } else if (action === 'exportJson') {
         const date = new Date().toISOString().slice(0, 10);
-        const path = await API.pickSavePath(`todocalendar-${date}.json`);
+        const path = await API.pickSavePath(`todocalendar-data-${date}.json`);
         if (!path) return;
         await API.exportDataToPath(path);
         alert(`导出成功: ${path}`);
       } else if (action === 'importJson') {
         const path = await API.pickOpenPath();
         if (!path) return;
+        const scope = await API.inspectImport(path);
         const confirmed = await this.confirmAction({
           title: '导入数据',
-          message: '导入会覆盖当前所有数据,确定继续?建议先导出备份。',
+          message: scope === 'data'
+            ? '导入将覆盖当前待办、分组、归档和备忘录，设置不变。操作前会保存恢复副本。确定继续？'
+            : '这是旧版任务文件，将覆盖当前待办、分组和归档，备忘录及设置不变。操作前会保存恢复副本。确定继续？',
           confirmText: '导入并覆盖',
           danger: true,
         });
         if (!confirmed) return;
-        await API.importDataFromPath(path);
+        await API.importDataFromPath(path, scope);
         await this.reload();
+        if (scope === 'data') await Memo.load();
         alert('导入成功');
+      } else if (action === 'exportBackup') {
+        const path = await API.pickSavePath('todocalendar-full-backup.json');
+        if (!path) return;
+        await API.exportBackup(path);
+        await this.alertAction({ title: '完整备份已保存', message: path });
+      } else if (action === 'restoreBackup') {
+        const path = await API.pickOpenPath();
+        if (!path) return;
+        const confirmed = await this.confirmAction({ title: '恢复完整备份', message: '将覆盖任务、备忘录和设置。恢复前会保留当前数据副本。确定继续？', confirmText: '恢复并覆盖', danger: true });
+        if (!confirmed) return;
+        const saved = await API.restoreBackup(path);
+        this.state.settings = await API.getSettings();
+        this.applySettingsToDom();
+        this.refreshDropdownValues();
+        await this.reload();
+        await Memo.load();
+        this.renderSettingsModal();
+        await this.alertAction({ title: '恢复成功', message: '恢复前副本：' + saved });
       } else if (action === 'reloadData') {
         await this.reload();
         alert('已重新加载');
