@@ -15,7 +15,7 @@ const AppPopover = {
     if (!c.anchor.isConnected || !c.anchor.getClientRects().length) { this.close(); return; }
     const rect = c.anchor.getBoundingClientRect(), margin = 8;
     const isPicker = c.panel.classList.contains('app-date-picker');
-    const preferredWidth = c.panel.classList.contains('app-picker-with-time') ? 335 : isPicker ? (c.panel.querySelector('.app-picker-calendar') ? 212 : 200) : 180;
+    const preferredWidth = c.panel.classList.contains('app-picker-with-time') ? 335 : isPicker ? (c.panel.querySelector('.app-picker-calendar') ? 212 : 200) : c.panel.classList.contains('app-help-popover') ? 280 : 180;
     const width = Math.min(innerWidth - margin * 2, isPicker ? preferredWidth : Math.max(rect.width, preferredWidth));
     c.panel.style.width = width + 'px';
     const below = innerHeight - rect.bottom - margin, above = rect.top - margin;
@@ -406,8 +406,9 @@ const AppUI = {
     window.addEventListener('resize',()=>AppPopover.close());
     document.addEventListener('keydown',e=>{
       const c=AppPopover.current;
-      if(c&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();AppPopover.close(true);return;}
+      if(c&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();AppPopover.close(!c.panel.classList.contains('app-help-popover'));return;}
       if(c&&e.key==='Tab'){
+        if(c.panel.classList.contains('app-help-popover')){AppPopover.close();return;}
         if(c.owner instanceof CustomSelect){const next=c.anchor;AppPopover.close();next.focus();return;}
         const nodes=[...c.panel.querySelectorAll('button:not(:disabled),input:not(:disabled),[role="listbox"]')].filter(n=>n.tabIndex!==-1 && n.getClientRects().length);
         const current=nodes.indexOf(document.activeElement);e.preventDefault();nodes[(current+(e.shiftKey?-1:1)+nodes.length)%nodes.length]?.focus();return;

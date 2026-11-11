@@ -11,7 +11,7 @@ const ReminderSettings = {
     const count = options.filter(g => g.enabled).length;
     return count === options.length ? `全部分组（${count}）` : count ? `已选择 ${count} / ${options.length} 个分组` : '未选择分组';
   },
-  html(r = {}, groups = [], settings = {}) {
+  html(r = {}, groups = [], settings = {}, embedded = false) {
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const row = (label, control) => `<div class="settings-row reminder-setting-row"><label>${label}</label>${control}</div>`;
     const check = (key, label) => row(label, `<button type="button" class="app-switch ${(key === 'newGroupEnabled' ? r[key] !== false : r[key]) ? 'on' : ''}" role="switch" aria-checked="${key === 'newGroupEnabled' ? r[key] !== false : !!r[key]}" aria-label="${label}" data-reminder-switch="${key}"><span></span></button>`);
@@ -19,7 +19,7 @@ const ReminderSettings = {
     const number = (key, label, min, max, unit) => row(label, `<span class="reminder-setting-field"><input aria-label="${label}" data-reminder="${key}" type="number" min="${min}" max="${max}" step="1" value="${esc(r[key])}"><span>${unit}</span></span>`);
     const time = (key, label) => row(label, `<input aria-label="${label}" data-reminder="${key}" type="time" required value="${esc(r[key] || '09:30')}">`);
     const group = (title, body) => `<div class="settings-group"><div class="settings-section-title">${title}</div>${body}</div>`;
-    return `<div class="settings-content-title">提醒</div><div class="settings-content-desc">仅在应用运行时提醒；启动后汇总未处理的过期事项，搁置待办不参与。</div>`
+    return (embedded ? '' : '<div class="settings-content-title">提醒</div>') + `<div class="settings-content-desc">仅在应用运行时提醒；启动后汇总未处理的过期事项，搁置待办不参与。</div>`
       + group('提醒方式', check('enabled','启用待办提醒') + select('scope','提醒范围',[['both','开始与截止'],['start','仅开始'],['end','仅截止']]) + check('popup','倒计时弹窗') + check('system','Windows 系统通知') + check('topmost','提醒弹窗置顶'))
       + group('参与提醒的分组', row('提醒分组', `<button type="button" class="cs-toggle reminder-group-toggle" id="reminderGroups" aria-haspopup="dialog" aria-expanded="false"><span>${esc(this.groupSummary(this.groupOptions(r, groups, settings)))}</span><span aria-hidden="true">⌄</span></button>`)
         + check('newGroupEnabled','新建分组默认提醒')

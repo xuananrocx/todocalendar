@@ -1,6 +1,7 @@
 mod backup;
 mod reminders;
 mod reminder_native;
+mod rest;
 mod exchange;
 mod validation;
 mod storage;
@@ -120,6 +121,8 @@ pub struct MemoData {
 pub struct Settings {
     #[serde(default)]
     pub reminders: reminders::Config,
+    #[serde(default)]
+    pub rest: rest::Config,
     pub theme: String,     // light | dark | system | glass-light | glass-dark
     pub glass_strength: u32, // 玻璃主题强度 0-100(透明度+模糊)
     pub font_size: String, // small | medium | large
@@ -200,6 +203,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             reminders: reminders::Config::default(),
+            rest: rest::Config::default(),
             theme: "system".into(),
             glass_strength: 65,
             font_size: "medium".into(),
@@ -692,6 +696,7 @@ fn load_settings(file: &PathBuf) -> Result<Settings, String> {
 
 fn save_settings(file: &PathBuf, s: &Settings) -> Result<(), String> {
     s.reminders.validate()?;
+    s.rest.validate()?;
     backup::before_write(file)?;
     storage::write_json(file, s)
 }
@@ -1670,7 +1675,11 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Result<Se
     }
     let mut cur = serde_json::to_value(&s).map_err(|e| e.to_string())?;
     for (k, v) in obj {
-        if k == "reminders" {
+        if k == "rest" {
+            for (field, value) in v.as_object().ok_or("休息提醒设置必须是对象")? {
+                cur["rest"].as_object_mut().unwrap().insert(field.clone(), value.clone());
+            }
+        } else if k == "reminders" {
             let fields = v.as_object().ok_or("提醒设置必须是对象")?;
             for (field, value) in fields {
                 if field == "groupEnabled" {
@@ -2195,6 +2204,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             reminders::reminder_snapshot,
+            rest::rest_snapshot,
+            rest::rest_action,
+            rest::rest_ready,
             reminders::reminder_resize,
             reminders::reminder_action,
             reminders::reminder_ready,
@@ -2250,6 +2262,7 @@ pub fn run() {
         .setup(|app| {
             eprintln!("[startup] identifier={} data_dir={}", app.config().identifier, app_dir(app.handle())?.display());
             reminders::start(app.handle())?;
+            rest::start(app.handle())?;
             apply_app_icon_on_startup(app.handle());
             maybe_auto_update_holidays(app.handle());
             // 备忘小窗:窗口模式下启动即预建(restore=false 也建,隐藏),

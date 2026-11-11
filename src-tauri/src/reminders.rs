@@ -544,6 +544,7 @@ pub async fn reminder_resize(window: tauri::WebviewWindow, height: f64) -> Resul
 }
 
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
+    if super::rest::blocking(app) { return Err("休息期间暂缓显示待办提醒".into()); }
     let w = app
         .get_webview_window("reminder")
         .ok_or("提醒窗口尚未就绪")?;
@@ -567,6 +568,14 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 fn tick(app: &tauri::AppHandle) -> Result<(), String> {
+    // Serialize delivery with entering/leaving rest: never mark an unseen popup as delivered.
+    let rest_service = app.try_state::<super::rest::Service>();
+    let _rest_delivery = rest_service.as_ref().map(|s| s.operation.lock()).transpose().map_err(|e| e.to_string())?;
+    static DEFERRED: AtomicBool = AtomicBool::new(false);
+    if super::rest::blocking(app) {
+        DEFERRED.store(true, Ordering::Release);
+        return Ok(());
+    }
     let service = app.state::<Service>();
     if !service.ready.load(Ordering::Acquire) {
         return Ok(());
@@ -613,6 +622,9 @@ fn tick(app: &tauri::AppHandle) -> Result<(), String> {
     }
     if changed {
         let _ = app.emit("reminders-changed", ());
+    }
+    if DEFERRED.swap(false, Ordering::AcqRel) && !empty && cfg.popup {
+        show(app)?;
     }
     if (changed || status_changed) && (fresh.is_empty() || retrying) {
         reminder_native::sync(app, &summary, &cfg)?;

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "rest",
+  "description": "Break screens only receive events; window lifecycle is controlled by Rust",
+  "windows": ["rest-*"],
+  "permissions": ["core:default"]
+}

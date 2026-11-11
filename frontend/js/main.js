@@ -11,6 +11,7 @@ const Main = {
     highlightId: null,
     settings: null,
     settingsTab: 'general',
+    reminderSettingsTab: 'todo',
     bulkExpandPending: false,
     archivedTodos: [],
     historyAllTodos: [],
@@ -1796,6 +1797,10 @@ const Main = {
   },
 
   renderSettingsModal(resetScroll = false) {
+    if (this.state.settingsTab === 'rest') {
+      this.state.settingsTab = 'reminders';
+      this.state.reminderSettingsTab = 'rest';
+    }
     const s = this.state.settings;
     const tab = this.state.settingsTab;
     document.querySelectorAll('.settings-nav-item').forEach(el => {
@@ -1898,7 +1903,15 @@ const Main = {
   },
 
   _settingsTabHtml(tab, s) {
-    if (tab === 'reminders') return ReminderSettings.html(s.reminders, this.state.groups, s);
+    if (tab === 'reminders') {
+      const selected = this.state.reminderSettingsTab === 'rest' ? 'rest' : 'todo';
+      const tabs = [['todo', '待办提醒'], ['rest', '休息提醒']].map(([key, label]) =>
+        `<button type="button" role="tab" id="reminder-tab-${key}" aria-selected="${selected === key}" aria-controls="reminderSettingsPanel" data-reminder-tab="${key}">${label}</button>`).join('');
+      return '<div class="settings-content-title">提醒</div>'
+        + `<div class="reminder-settings-tabs" role="tablist" aria-label="提醒类型">${tabs}</div>`
+        + `<div id="reminderSettingsPanel" role="tabpanel" aria-labelledby="reminder-tab-${selected}">`
+        + (selected === 'rest' ? RestSettings.html(s.rest, true) : ReminderSettings.html(s.reminders, this.state.groups, s, true)) + '</div>';
+    }
     if (tab === 'general') {
       return `
         <div class="settings-content-title">通用</div>
@@ -2326,7 +2339,27 @@ const Main = {
   },
 
   _bindSettingsContent(tab, s) {
-    if (tab === 'reminders') { ReminderSettings.bind(this); return; }
+    if (tab === 'reminders') {
+      const content = document.getElementById('settingsContent');
+      content.querySelectorAll('[data-reminder-tab]').forEach(button => {
+        button.onclick = () => {
+          if (this.state.reminderSettingsTab === button.dataset.reminderTab) return;
+          this.state.reminderSettingsTab = button.dataset.reminderTab;
+          this.renderSettingsModal(true);
+          document.getElementById(button.id)?.focus({ preventScroll: true });
+        };
+        button.onkeydown = e => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+          e.preventDefault();
+          const next = e.key === 'Home' ? 'todo' : e.key === 'End' ? 'rest' : button.dataset.reminderTab === 'todo' ? 'rest' : 'todo';
+          content.querySelector(`[data-reminder-tab="${next}"]`).click();
+          document.getElementById(`reminder-tab-${next}`)?.focus({ preventScroll: true });
+        };
+      });
+      if (this.state.reminderSettingsTab === 'rest') RestSettings.bind(this);
+      else ReminderSettings.bind(this);
+      return;
+    }
     const content = document.getElementById('settingsContent');
 
     // segmented

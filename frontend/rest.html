@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>休息提醒</title><link rel="stylesheet" href="css/rest.css"></head>
+<body>
+<header><span>☕ TodoCalendar <span class="muted">/ 休息一下</span></span><span id="mode">休息提醒</span><button id="skip" class="notice-skip" hidden>跳过本次 <span aria-hidden="true">→</span></button><button id="dismissWarning" class="notice-close" aria-label="关闭提示，到点仍会休息" title="关闭提示，到点仍会休息" hidden>关闭弹窗</button></header>
+<main id="restScreen" hidden>
+  <div class="symbol" aria-hidden="true">☘</div><div class="eyebrow">暂时离开屏幕，把时间还给自己</div>
+  <h1 id="quote"></h1><p id="subtitle"></p>
+  <div class="clock-label">剩余休息时间</div><div id="clock" class="clock">05:00</div>
+  <div class="track"><span id="progress"></span></div>
+</main>
+<main id="noticeScreen" hidden><h1 id="noticeTitle"></h1><p id="noticeText"></p><div class="actions" id="actions"><button id="start" class="primary">开始休息</button><button id="later">稍后 5 分钟</button><button id="skipWarning" class="quiet" hidden>跳过此次休息 <span aria-hidden="true">→</span></button></div></main>
+<footer id="footer" hidden><span class="muted">休息结束后自动返回</span><button id="exit"><span>长按 2 秒紧急退出</span></button></footer>
+<p id="error" role="alert" hidden></p><script src="js/rest-window.js"></script>
+</body></html>

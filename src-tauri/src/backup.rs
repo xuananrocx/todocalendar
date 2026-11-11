@@ -78,6 +78,7 @@ pub fn validate(bundle: &mut Bundle) -> Result<(), String> {
     let settings: Settings =
         serde_json::from_value(merged).map_err(|e| format!("备份设置无效：{}", e))?;
     settings.reminders.validate()?;
+    settings.rest.validate()?;
     bundle.settings = serde_json::to_value(settings).map_err(|e| e.to_string())?;
     Ok(())
 }
