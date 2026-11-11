@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>待办提醒</title><link rel="stylesheet" href="css/style.css"><link rel="stylesheet" href="css/reminder.css"><link rel="stylesheet" href="css/ui.css">
+</head>
+<body class="reminder-window">
+ <header class="reminder-header"><h1>待办提醒</h1><span id="reminderCount"></span></header>
+ <p id="reminderError" role="alert" hidden></p>
+ <main id="reminderList" aria-label="待处理提醒"></main>
+ <footer class="reminder-footer"><button id="reminderLater" class="btn">稍后提醒</button><button id="reminderAck" class="btn primary">已知晓</button></footer>
+ <script src="js/ui.js"></script>
+ <script src="js/reminder-window.js"></script>
+</body></html>

@@ -37,40 +37,8 @@
     }
   }
 
-  // 应用内确认弹窗(与主窗口 Main.confirmAction 同款)
-  let confirmResolver = null;
-  function closeConfirmWin(confirmed = false) {
-    const r = confirmResolver;
-    if (!r) return;
-    confirmResolver = null;
-    document.getElementById('confirmMask').hidden = true;
-    r(confirmed);
-  }
-  function memoWinConfirm({ title = '确认操作', message, messageHtml, confirmText = '确认', danger = false, hideCancel = false }) {
-    if (confirmResolver) closeConfirmWin(false);
-    const mask = document.getElementById('confirmMask');
-    const modal = mask.querySelector('.confirm-modal');
-    const accept = document.getElementById('btnConfirmAccept');
-    const cancel = document.getElementById('btnConfirmCancel');
-    document.getElementById('confirmTitle').textContent = title;
-    const msgEl = document.getElementById('confirmMessage');
-    if (messageHtml != null) msgEl.innerHTML = messageHtml;
-    else msgEl.textContent = message;
-    if (cancel) cancel.hidden = hideCancel;
-    document.getElementById('confirmIcon').innerHTML = danger ? Icon.trash() : Icon.info();
-    accept.textContent = confirmText;
-    accept.className = danger ? 'btn confirm-danger' : 'btn primary';
-    modal.classList.toggle('danger', danger);
-    mask.hidden = false;
-    return new Promise(resolve => {
-      confirmResolver = resolve;
-      requestAnimationFrame(() => accept.focus());
-    });
-  }
-  document.getElementById('btnConfirmAccept').onclick = () => closeConfirmWin(true);
-  document.getElementById('btnConfirmCancel').onclick = () => closeConfirmWin(false);
+  const memoWinConfirm = options => AppDialog.confirm(options);
 
-  // Main 桩:memo.js 依赖的最小能力集
   window.Main = {
     state,
     async patchSettings(patch) {
@@ -80,7 +48,7 @@
       return saved;
     },
     confirmAction(opt) { return memoWinConfirm(opt); },
-    alertAction(opt) { return memoWinConfirm({ confirmText: '知道了', hideCancel: true, title: '提示', ...opt }); },
+    alertAction(opt) { return memoWinConfirm({ confirmText: '已知晓', hideCancel: true, title: '提示', ...opt }); },
     _attachMaskClose(maskId, closeCallback) {
       const mask = document.getElementById(maskId);
       if (!mask) return;

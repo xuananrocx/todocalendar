@@ -7,6 +7,8 @@
 <script src="js/lib/lunar.min.js"></script>
 <link rel="stylesheet" href="vendor/vditor/vditor.css">
 <script src="vendor/vditor/vditor.min.js"></script>
+<link rel="stylesheet" href="css/reminder.css">
+<link rel="stylesheet" href="css/ui.css">
 </head>
 <body>
 <div class="app">
@@ -247,7 +249,7 @@
       <input type="checkbox" id="beChkStart">
       <label for="beChkStart" class="bulk-edit-label">开始时间</label>
       <div class="input-wrap">
-        <input type="date" id="beFStart">
+        <input type="date" id="beFStart" aria-label="批量修改开始时间">
         <div class="picker-overlay" data-target="beFStart"></div>
       </div>
       <button type="button" id="beBtnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -257,7 +259,7 @@
       <input type="checkbox" id="beChkEnd">
       <label for="beChkEnd" class="bulk-edit-label">结束时间</label>
       <div class="input-wrap">
-        <input type="date" id="beFEnd">
+        <input type="date" id="beFEnd" aria-label="批量修改截止时间">
         <div class="picker-overlay" data-target="beFEnd"></div>
       </div>
       <button type="button" id="beBtnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -266,7 +268,7 @@
     <div class="bulk-edit-field">
       <input type="checkbox" id="beChkDone">
       <label for="beChkDone" class="bulk-edit-label">完成状态</label>
-      <select id="beFDone">
+      <select id="beFDone" aria-label="完成状态">
         <option value="false">未完成</option>
         <option value="true">已完成</option>
       </select>
@@ -310,7 +312,7 @@
           </div>
           <div class="time-row">
             <div class="input-wrap">
-              <input type="date" id="fStart">
+              <input type="date" id="fStart" aria-label="开始时间">
               <div class="picker-overlay" data-target="fStart"></div>
             </div>
             <button type="button" id="btnStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -323,7 +325,7 @@
           </div>
           <div class="time-row">
             <div class="input-wrap">
-              <input type="date" id="fEnd">
+              <input type="date" id="fEnd" aria-label="截止时间">
               <div class="picker-overlay" data-target="fEnd"></div>
             </div>
             <button type="button" id="btnEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -375,7 +377,7 @@
     <label>开始时间
       <div class="time-row">
         <div class="input-wrap">
-          <input type="datetime-local" id="fBulkStart">
+          <input type="datetime-local" id="fBulkStart" aria-label="批量新建开始时间">
           <div class="picker-overlay" data-target="fBulkStart"></div>
         </div>
         <button type="button" id="btnBulkStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -384,7 +386,7 @@
     <label>结束时间
       <div class="time-row">
         <div class="input-wrap">
-          <input type="datetime-local" id="fBulkEnd">
+          <input type="datetime-local" id="fBulkEnd" aria-label="批量新建截止时间">
           <div class="picker-overlay" data-target="fBulkEnd"></div>
         </div>
         <button type="button" id="btnBulkEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -426,7 +428,7 @@
     <label>开始时间
       <div class="time-row">
         <div class="input-wrap">
-          <input type="date" id="fTreeStart">
+          <input type="date" id="fTreeStart" aria-label="树形新建开始时间">
           <div class="picker-overlay" data-target="fTreeStart"></div>
         </div>
         <button type="button" id="btnTreeStartClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -435,7 +437,7 @@
     <label>结束时间
       <div class="time-row">
         <div class="input-wrap">
-          <input type="date" id="fTreeEnd">
+          <input type="date" id="fTreeEnd" aria-label="树形新建截止时间">
           <div class="picker-overlay" data-target="fTreeEnd"></div>
         </div>
         <button type="button" id="btnTreeEndClock" class="time-toggle" title="添加具体时间">+ 时间</button>
@@ -545,6 +547,7 @@
         <div class="settings-nav-item active" data-tab="general"><i data-icon="settings"></i>通用</div>
         <div class="settings-nav-item" data-tab="list"><i data-icon="list"></i>列表</div>
         <div class="settings-nav-item" data-tab="calendar"><i data-icon="calendar"></i>日历</div>
+        <div class="settings-nav-item" data-tab="reminders"><i data-icon="clock"></i>提醒</div>
         <div class="settings-nav-item" data-tab="data"><i data-icon="database"></i>数据</div>
         <div class="settings-nav-item" data-tab="about"><i data-icon="info"></i>关于</div>
       </nav>
@@ -620,9 +623,11 @@
 </div>
 
 <script src="js/icons.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/api.js"></script>
 <script src="js/render.js"></script>
 <script src="js/memo.js"></script>
+<script src="js/reminder-settings.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

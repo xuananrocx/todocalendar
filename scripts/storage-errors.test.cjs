@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 function load(name, context, exposed) {
+  context.AppDialog ??= { alert: (message, options) => context.alert?.(message, options) };
   let source = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', name), 'utf8');
   source = source.replace(/Main\.init\(\);\s*$/, '');
   vm.createContext(context);
@@ -29,6 +30,39 @@ test('settings startup failure stops initialization without resetting data', asy
   assert.equal(resets, 0);
   assert.equal(shown, 'damaged settings');
 });
+
+for (const [method, startId, endId, titleId] of [
+  ['saveModal', 'fStart', 'fEnd', 'fTitle'],
+  ['saveBulkModal', 'fBulkStart', 'fBulkEnd', 'fBulkTitles'],
+  ['saveBulkTreeModal', 'fTreeStart', 'fTreeEnd', 'fTreeTitles'],
+]) {
+  test(`${method} rejects reversed dates with a themed dialog and preserves the draft`, async () => {
+    const fields = {
+      [titleId]: { value: 'draft title' },
+      [startId]: { value: '2026-11-10', type: 'date' },
+      [endId]: { value: '2026-11-09', type: 'date' },
+    };
+    const messages = [];
+    let writes = 0;
+    const main = load('main.js', {
+      document: { getElementById: id => fields[id] },
+      Render: { localDateToISO: value => value + 'T00:00:00+08:00' },
+      AppDialog: { alert: (message, options) => { messages.push({ message, options }); } },
+      API: { create: async () => { writes++; }, update: async () => { writes++; } },
+    }, 'Main');
+    main.parentSelect = { getValue: () => '' };
+    let closed = false;
+    main.closeModal = main.closeBulkModal = main.closeBulkTreeModal = () => { closed = true; };
+    await main[method]();
+    assert.equal(messages.length, 1);
+    assert.equal(messages[0].message, '截止时间不能早于开始时间');
+    assert.equal(messages[0].options.focusTarget, endId);
+    assert.equal(writes, 0);
+    assert.equal(closed, false);
+    assert.equal(fields[titleId].value, 'draft title');
+    assert.equal(fields[endId].value, '2026-11-09');
+  });
+}
 
 test('failed settings save rolls back displayed preferences', async () => {
   const messages = [];
@@ -168,4 +202,23 @@ test('cancelled import and invalid preview never invoke replacement', async () =
     assert.equal(writes, 0);
     assert.equal(confirmations, invalid ? 0 : 1);
   }
+});
+
+
+test('editing explicit midnight preserves concrete time precision', () => {
+  const input = {value: '', type: 'date'};
+  const main = load('main.js', {document: {getElementById: () => input}}, 'Main');
+  main._setInputPrecision = (_id, timed) => {input.type = timed ? 'datetime-local' : 'date';};
+  main._renderDateDisplay = () => {};
+  // Supply the real conversion helpers through the same VM context.
+  const context = {document: {getElementById: () => input}, Render: {
+    isoToLocalInput: () => '2026-11-09T00:00', isoToLocalDate: () => '2026-11-09'
+  }};
+  const editor = load('main.js', context, 'Main');
+  editor._setInputPrecision = main._setInputPrecision;
+  editor._renderDateDisplay = () => {};
+  editor._writeInput('fStart', '2026-11-09T00:00:00+08:00', true);
+  assert.equal(input.type, 'datetime-local');
+  editor._writeInput('fStart', '2026-11-09T00:00:00+08:00', false);
+  assert.equal(input.type, 'date');
 });

@@ -8,11 +8,11 @@ function tauriErrMsg(e) {
 }
 window.__tauriErrMsg = tauriErrMsg;
 
-// Startup cannot use Main's confirmation dialog before its events are bound.
+// Startup recovery also works before Main's events are bound.
 window.showStorageStartupError = function (error) {
   const mask = document.createElement('div');
   mask.className = 'modal-mask';
-  mask.style.zIndex = '99999';
+  mask.style.zIndex = '19000'; // Keep shared confirmation dialogs above recovery.
   const modal = document.createElement('div');
   modal.className = 'modal';
   modal.style.padding = '24px';
@@ -39,7 +39,7 @@ window.showStorageStartupError = function (error) {
     try {
       const path = await API.pickOpenPath();
       if (!path) return;
-      if (!await dialog.confirm('将覆盖任务、备忘录和设置，恢复前会保留当前文件副本。确定继续？', { title: '恢复完整备份', kind: 'warning' })) return;
+      if (!await AppDialog.confirm({ message: '将覆盖任务、备忘录和设置，恢复前会保留当前文件副本。确定继续？', title: '恢复完整备份', danger: true, confirmText: '恢复并覆盖' })) return;
       await API.restoreBackup(path);
       location.reload();
     } catch (e) { message.textContent = tauriErrMsg(e); }
@@ -55,8 +55,8 @@ const API = {
     return await invoke('list_todos');
   },
   async create(body) {
-    const { title, parentId, startTime, endTime, notes, groupId } = body;
-    return await invoke('create_todo', { title, parentId, startTime, endTime, notes: notes ?? null, groupId: groupId ?? null });
+    const { title, parentId, startTime, endTime, startHasTime, endHasTime, notes, groupId } = body;
+    return await invoke('create_todo', { title, parentId, startTime, endTime, startHasTime: startHasTime ?? null, endHasTime: endHasTime ?? null, notes: notes ?? null, groupId: groupId ?? null });
   },
   async update(id, body) {
     return await invoke('update_todo', { id, patch: body });

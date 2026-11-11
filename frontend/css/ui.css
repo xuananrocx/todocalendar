@@ -1,0 +1,79 @@
+/* Form sources retain data semantics but never open browser-native UI. */
+.app-native-source { display:none!important; }
+.input-wrap:has(.app-date-trigger) > .date-display,
+.input-wrap:has(.app-date-trigger) > .picker-overlay { display:none!important; }
+.app-date-trigger { display:flex; align-items:center; justify-content:space-between; gap:10px; width:100%; padding:7px 10px; min-height:32px; border:1px solid var(--border); border-radius:6px; background:var(--panel); color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.app-date-value {min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.app-date-icon {display:inline-flex;color:var(--muted);flex-shrink:0;}
+.app-date-icon .svg-icon {width:14px;height:14px;}
+.app-date-trigger.placeholder { color:var(--muted); }
+.app-date-trigger:hover:not(:disabled),.app-date-trigger:focus-visible {border-color:var(--primary);}
+.app-date-trigger:disabled {opacity:.55;cursor:not-allowed;}
+.app-popover { position:fixed!important; z-index:15000!important; left:0; top:0; right:auto; margin:0; overflow:auto; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:10px; box-shadow:0 8px 28px rgba(0,0,0,.16); }
+html[data-glass] .app-popover { background:var(--glass-menu); backdrop-filter:none; -webkit-backdrop-filter:none; }
+.app-popover .cs-option { width:100%; display:flex; align-items:center; gap:10px; border:0; background:transparent; color:var(--text); font:inherit; font-size:13px; text-align:left; cursor:pointer; }
+.app-popover .cs-option.active {color:var(--primary);}
+.app-popover .cs-option:hover:not(:disabled),.app-popover .cs-option:focus-visible {background:var(--hover-bg);outline:2px solid var(--primary);outline-offset:-2px;}
+.app-popover .cs-option:disabled {opacity:.45;cursor:not-allowed;}
+.cs-select {display:block;min-width:0;}
+.cs-select:has(.cs-toggle:disabled) {opacity:.7;}
+.reminder-setting-row > .cs-select {width:220px;max-width:100%;}
+.reminder-setting-row > .app-date-trigger {width:220px;max-width:100%;flex-shrink:0;}
+.reminder-setting-row > label {flex:1;min-width:0;}
+.bulk-edit-field.unchecked .cs-select,.bulk-edit-field.unchecked .app-date-trigger {opacity:.45;pointer-events:none;}
+.app-date-picker {padding:10px;}
+.app-picker-heading,.app-picker-actions,.app-picker-jump {display:flex;align-items:center;gap:8px;}
+.app-picker-body {display:flex;gap:10px;align-items:stretch;}
+.app-picker-calendar {flex:1;min-width:0;}
+.app-picker-with-time .app-picker-calendar {flex:0 0 190px;}
+.app-picker-heading {justify-content:space-between;font-size:14px;}
+.app-picker-jump {margin:6px 0;gap:6px;}
+.app-picker-jump label {flex:1;min-width:0;}
+.app-picker-heading .btn {padding:3px 7px;}
+.app-picker-heading [data-month] {white-space:nowrap;font-size:13px;}
+.app-picker-jump label {display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);}
+.app-picker-jump input,.app-picker-clock input {width:52px;min-width:0;border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--text);padding:4px;font:inherit;}
+.app-picker-clock {flex:1;min-width:0;}
+.app-picker-with-time .app-picker-clock {border-left:1px solid var(--border);padding-left:10px;}
+.app-clock-title {font-size:13px;line-height:26px;text-align:center;}
+.app-time-columns {display:flex;gap:6px;justify-content:center;margin-top:6px;}
+.app-time-column {flex:1;min-width:0;max-width:100px;}
+.app-time-column label {display:flex;flex-direction:column;gap:6px;align-items:center;font-size:12px;color:var(--muted);}
+.app-picker-clock input {width:100%;text-align:center;font-variant-numeric:tabular-nums;}
+.app-time-window {position:relative;margin-top:6px;}
+.app-time-window::before {content:'';position:absolute;top:42px;left:0;right:0;height:28px;border-radius:6px;background:color-mix(in srgb,var(--primary) 12%,transparent);border:1px solid color-mix(in srgb,var(--primary) 35%,transparent);pointer-events:none;}
+.app-time-wheel {height:112px;overflow-y:auto;padding:42px 0;scroll-snap-type:y mandatory;overscroll-behavior-y:contain;scrollbar-width:none;touch-action:pan-y;cursor:grab;user-select:none;position:relative;mask-image:linear-gradient(to bottom,transparent,#000 25%,#000 75%,transparent);}
+.app-time-wheel::-webkit-scrollbar {display:none;}
+.app-time-wheel.dragging {scroll-snap-type:none;cursor:grabbing;}
+.app-time-wheel:focus-visible {outline:2px solid var(--primary);outline-offset:-2px;border-radius:6px;}
+.app-time-option {height:28px;line-height:28px;text-align:center;scroll-snap-align:center;font-size:14px;font-variant-numeric:tabular-nums;color:var(--muted);}
+.app-time-option.selected {color:var(--primary);font-size:14px;font-weight:600;}
+.app-popover input:focus-visible {outline:2px solid var(--primary);outline-offset:2px;border-color:var(--primary);}
+input[type="number"] {appearance:textfield;}
+input[type="number"]::-webkit-inner-spin-button,input[type="number"]::-webkit-outer-spin-button {-webkit-appearance:none;margin:0;}
+.app-picker-week,.app-picker-days {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;}
+.app-picker-week {font-size:12px;text-align:center;color:var(--muted);padding:5px 0;}
+.app-picker-day {aspect-ratio:1;min-width:0;padding:0;border:0;border-radius:6px;background:transparent;color:var(--text);font:inherit;font-size:13px;cursor:pointer;}
+.app-picker-day.outside {color:var(--muted);}
+.app-picker-day.selected {background:var(--primary);color:#fff;}
+.app-picker-day:hover:not(:disabled):not(.selected) {background:var(--hover-bg);}
+.app-picker-day:focus-visible {outline:2px solid var(--primary);outline-offset:-2px;}
+.app-picker-day.selected:focus-visible {outline-color:var(--text);}
+.app-picker-day:disabled {opacity:.35;cursor:not-allowed;}
+.app-picker-actions {justify-content:flex-end;border-top:1px solid var(--border);padding-top:6px;margin-top:6px;flex-wrap:wrap;}
+.app-picker-actions {gap:4px;}
+.app-picker-actions .btn {padding:4px 6px;font-size:12px;}
+.app-field-error {color:var(--danger);font-size:12px;margin:8px 0 0;white-space:pre-wrap;}
+.app-dialog-mask {z-index:20000!important;}
+.app-dialog-mask .confirm-modal {max-width:calc(100vw - 32px);max-height:calc(100vh - 32px);overflow:auto;}
+.app-dialog-mask .confirm-message {white-space:pre-wrap;overflow-wrap:anywhere;}
+.app-dialog-mask .confirm-message.has-html {white-space:normal;}
+.reminder-setting-row .switch-row {width:100%;}
+.app-switch {position:relative;width:32px;height:18px;padding:0;border:0;border-radius:9px;background:var(--border);cursor:pointer;flex-shrink:0;transition:background .2s;}
+.app-switch span {position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .2s;}
+.app-switch.on {background:linear-gradient(135deg,var(--primary-from),var(--primary-to));}
+.app-switch.on span {left:16px;}
+.app-switch:focus-visible {outline:2px solid var(--primary);outline-offset:3px;}
+.app-switch:disabled {opacity:.55;cursor:wait;}
+@media(max-width:480px){.reminder-setting-row > .cs-select{width:100%;}}
+@media(max-width:350px){.app-picker-with-time .app-picker-body{flex-wrap:wrap;}.app-picker-with-time .app-picker-calendar{flex-basis:100%;}.app-picker-with-time .app-picker-clock{border-left:0;border-top:1px solid var(--border);padding:12px 0 0;}}

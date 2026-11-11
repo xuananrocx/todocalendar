@@ -1,4 +1,6 @@
 mod backup;
+mod reminders;
+mod reminder_native;
 mod exchange;
 mod validation;
 mod storage;
@@ -30,6 +32,10 @@ pub struct Todo {
     pub start_time: Option<String>,
     #[serde(default)]
     pub end_time: Option<String>,
+    #[serde(default)]
+    pub start_has_time: Option<bool>,
+    #[serde(default)]
+    pub end_has_time: Option<bool>,
     #[serde(default)]
     pub order: i64,
     #[serde(default = "default_true")]
@@ -112,6 +118,8 @@ pub struct MemoData {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Settings {
+    #[serde(default)]
+    pub reminders: reminders::Config,
     pub theme: String,     // light | dark | system | glass-light | glass-dark
     pub glass_strength: u32, // 玻璃主题强度 0-100(透明度+模糊)
     pub font_size: String, // small | medium | large
@@ -191,6 +199,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            reminders: reminders::Config::default(),
             theme: "system".into(),
             glass_strength: 65,
             font_size: "medium".into(),
@@ -682,6 +691,7 @@ fn load_settings(file: &PathBuf) -> Result<Settings, String> {
 }
 
 fn save_settings(file: &PathBuf, s: &Settings) -> Result<(), String> {
+    s.reminders.validate()?;
     backup::before_write(file)?;
     storage::write_json(file, s)
 }
@@ -914,15 +924,19 @@ fn recompute_parent_times(data: &mut Data, settings: &Settings, mut parent_id: S
     while visited.insert(parent_id.clone()) {
         let Some(index) = data.todos.iter().position(|t| t.id == parent_id) else { return; };
         let children: Vec<_> = data.todos.iter().filter(|t| t.parent_id.as_deref() == Some(&parent_id)).collect();
-        let start = children.iter().filter_map(|t| t.start_time.clone()).min_by_key(|t| time_order(t));
-        let end = children.iter().filter_map(|t| t.end_time.clone()).max_by_key(|t| time_order(t));
+        let start_child = children.iter().filter(|t| t.start_time.is_some()).min_by_key(|t| time_order(t.start_time.as_deref().unwrap()));
+        let start = start_child.and_then(|t| t.start_time.clone());
+        let start_precision = start_child.and_then(|t| t.start_has_time);
+        let end_child = children.iter().filter(|t| t.end_time.is_some()).max_by_key(|t| time_order(t.end_time.as_deref().unwrap()));
+        let end = end_child.and_then(|t| t.end_time.clone());
+        let end_precision = end_child.and_then(|t| t.end_has_time);
         let parent = &mut data.todos[index];
         let mut changed = false;
-        if settings.auto_sync_start && start.is_some() && parent.start_time != start {
-            parent.start_time = start; changed = true;
+        if settings.auto_sync_start && start.is_some() && (parent.start_time != start || parent.start_has_time != start_precision) {
+            parent.start_time = start; parent.start_has_time = start_precision; changed = true;
         }
-        if settings.auto_sync_end && end.is_some() && parent.end_time != end {
-            parent.end_time = end; changed = true;
+        if settings.auto_sync_end && end.is_some() && (parent.end_time != end || parent.end_has_time != end_precision) {
+            parent.end_time = end; parent.end_has_time = end_precision; changed = true;
         }
         if !changed { return; }
         let Some(next) = parent.parent_id.clone() else { return; };
@@ -951,6 +965,8 @@ fn create_todo(
     start_time: Option<String>,
     end_time: Option<String>,
     notes: Option<String>,
+    start_has_time: Option<bool>,
+    end_has_time: Option<bool>,
     group_id: Option<String>,
 ) -> Result<Todo, String> {
     let _store = lock_store(&app)?;
@@ -996,6 +1012,8 @@ fn create_todo(
         parent_id: parent_id.clone(),
         start_time: start_time.clone(),
         end_time: end_time.clone(),
+        start_has_time,
+        end_has_time,
         order: max_order + 1,
         expanded: true,
         created_at: now_iso(),
@@ -1137,6 +1155,11 @@ fn apply_todo_patch(data: &mut Data, settings: &Settings, id: &str, patch: Value
     let obj = patch.as_object().ok_or_else(|| "待办更新必须是 JSON 对象".to_string())?;
     let mut current = serde_json::to_value(&old).map_err(|e| e.to_string())?;
     for (k, v) in obj { current.as_object_mut().unwrap().insert(k.clone(), v.clone()); }
+    for (time, precision) in [("startTime", "startHasTime"), ("endTime", "endHasTime")] {
+        if obj.contains_key(time) && !obj.contains_key(precision) && current[time] != serde_json::to_value(&old).unwrap()[time] {
+            current[precision] = Value::Null;
+        }
+    }
     let mut updated: Todo = serde_json::from_value(current).map_err(|e| format!("待办字段格式异常：{}", e))?;
     if updated.id != old.id { return Err("不能修改任务 ID".into()); }
     if let Some(pid) = &updated.parent_id {
@@ -1641,7 +1664,12 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Result<Se
 
     let obj = patch.as_object().ok_or_else(|| "设置更新必须是 JSON 对象".to_string())?;
     let mut cur = serde_json::to_value(&s).map_err(|e| e.to_string())?;
-    for (k, v) in obj { cur.as_object_mut().unwrap().insert(k.clone(), v.clone()); }
+    for (k, v) in obj {
+        if k == "reminders" {
+            let fields = v.as_object().ok_or("提醒设置必须是对象")?;
+            for (field,value) in fields { cur["reminders"].as_object_mut().unwrap().insert(field.clone(),value.clone()); }
+        } else { cur.as_object_mut().unwrap().insert(k.clone(), v.clone()); }
+    }
     s = serde_json::from_value(cur).map_err(|e| format!("设置字段格式异常：{}", e))?;
     save_settings(&file, &s)?;
     drop(_store); // Window callbacks may also save settings.
@@ -2152,6 +2180,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            reminders::reminder_snapshot,
+            reminders::reminder_action,
+            reminders::reminder_ready,
+            reminders::reminder_open_todo,
+            reminders::reminder_sound_preview,
             diag_log,
             list_todos,
             list_archived_todos,
@@ -2201,6 +2234,7 @@ pub fn run() {
         ])
         .setup(|app| {
             eprintln!("[startup] identifier={} data_dir={}", app.config().identifier, app_dir(app.handle())?.display());
+            reminders::start(app.handle())?;
             apply_app_icon_on_startup(app.handle());
             maybe_auto_update_holidays(app.handle());
             // 备忘小窗:窗口模式下启动即预建(restore=false 也建,隐藏),
@@ -2227,6 +2261,9 @@ pub fn run() {
             }
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if window.label() == "main" && matches!(event, tauri::WindowEvent::Destroyed) { window.app_handle().exit(0); }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -2249,6 +2286,18 @@ mod tests {
 
     impl Drop for TestDir {
         fn drop(&mut self) { let _ = fs::remove_dir_all(&self.0); }
+    }
+
+    #[test]
+    fn parent_sync_copies_explicit_precision_even_when_timestamp_is_unchanged() {
+        let mut parent=todo("parent",None,false,None,None);
+        parent.end_time=Some("2026-11-09T00:00:00+08:00".into());
+        parent.end_has_time=Some(false);
+        let mut child=todo("child",Some("parent"),false,None,None);
+        child.end_time=parent.end_time.clone();child.end_has_time=Some(true);
+        let mut data=data(vec![parent,child]);
+        recompute_parent_times(&mut data,&Settings::default(),"parent".into());
+        assert_eq!(data.todos[0].end_has_time,Some(true));
     }
 
     #[test]
@@ -2403,6 +2452,8 @@ mod tests {
             parent_id: parent_id.map(str::to_string),
             start_time: None,
             end_time: None,
+            start_has_time: None,
+            end_has_time: None,
             order: 0,
             expanded: false,
             created_at: "2026-07-01T00:00:00Z".into(),

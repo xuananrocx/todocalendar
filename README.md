@@ -37,6 +37,8 @@
 - 字体大小(小 / 中 / 较大 / 大)
 - 字体颜色偏好(默认 + 3 暖色预设)
 - 紧凑模式
+- 下拉框、日期/时间面板、校验及确认弹窗统一跟随主题，支持键盘操作
+- 日期面板右侧展开时间，小时/分钟支持滚轮、拖动、滑动选择及手动输入；独立时间选择器保持一致
 
 <p align="center"><img src="docs/screenshots/settings.png" width="65%" alt="设置面板"></p>
 
@@ -73,6 +75,16 @@
 
 每日自动备份默认关闭。开启后，在每天第一次数据修改前保存完整快照；默认保留 5 份自动备份，可设为 1–100 份。导入、恢复前的副本不参与自动轮换。备份失败时该次修改不会继续。
 
+## 待办提醒
+
+设置 → 提醒可配置全局提醒（默认开启，开始与截止均提醒，弹窗与 Windows 通知均开启，弹窗置顶），选择开始、截止或两者，以及倒计时弹窗和 Windows 系统通知。仅日期待办默认当天 09:30 提醒一次，可配置次数与间隔，计划不能跨到次日；具体时间默认开始前 10 分钟、截止前 30 分钟提醒。日期输入精度自动保存，旧数据本地零点按仅日期兼容；实际午夜任务请编辑并保留具体时间。
+
+「已知晓」结束该事项对应开始/截止时间的本轮提醒，不完成待办；「稍后提醒」默认延后 10 分钟，不修改待办时间。处理方式可选关闭或已知晓后记为处理，或成功显示后结束当前批次。多个错过批次合并；应用启动后汇总所有仍有效的未处理提醒，完成、归档、删除、搁置待办不参与。父子任务分别参与并显示层级路径。关闭主窗口退出应用，不增加托盘或系统唤醒任务。
+
+提示音默认「轻敲提示」，音量 50%（可选「无」关闭），可选 Windows 系统默认、轻敲提示、清亮三音。自带音效为本地合成 WAV，音量单独控制；同批次两种渠道只响一次。系统通知受 Windows 权限与勿扰设置影响；自带音效在 Windows 通知状态查询失败或报告不允许打扰时静音。系统接受通知发送不代表用户实际看到。
+
+提醒处理记录及弹窗位置保存在本机 `reminder-state.json`，不随数据导出或完整备份迁移；完整备份包含提醒设置和任务精度。导入/恢复后按新内容重建计划，并保留本机同一任务、同一时间的已处理记录，避免反复提示。不同数据目录使用独立通知身份和单实例锁。首次发送系统通知时注册当前用户的通知名称及开始菜单快捷方式；无需管理员权限。
+
 ## 开发
 
 依赖:[Node.js](https://nodejs.org/) 18+、[Rust](https://www.rust-lang.org/tools/install) stable、Windows SDK。
@@ -90,7 +102,7 @@ npx --yes @tauri-apps/cli@2.11.4 build --bundles nsis
 
 需要全新空数据的人工验证环境时，在仓库目录执行 `powershell -ExecutionPolicy Bypass -File scripts/start-review.ps1`。每次会创建独立的 `com.todocalendar.dev.review-*` 数据目录，显示“修复验证版”窗口，并输出日志和数据目录位置；不读取安装版或已有开发版数据。
 
-验证命令：`cargo test --manifest-path src-tauri/Cargo.toml --locked --offline`、`node --test scripts/storage-errors.test.cjs`。
+验证命令：`cargo test --manifest-path src-tauri/Cargo.toml --locked --offline`、`node --test scripts/storage-errors.test.cjs scripts/ui-controls.test.cjs`。
 
 ## 反馈
 

@@ -1,119 +1,3 @@
-// 自定义下拉框:替代弹窗里系统默认的 <select>(父级/分组)
-// items: [{value, label, depth}] ;value 为 '' 表示"无/顶层"
-class CustomSelect {
-  constructor(rootEl, { onchange = null } = {}) {
-    this.root = rootEl;
-    this.onchange = onchange;
-    this.items = [];
-    this.value = '';
-    this.disabled = false;
-    this.title = '';
-    rootEl.classList.add('cs-select');
-    rootEl.innerHTML = `
-      <button type="button" class="cs-toggle">
-        <span class="cs-label"></span>
-        <span class="cs-chevron"></span>
-      </button>
-      <div class="cs-menu" hidden></div>`;
-    this.toggleBtn = rootEl.querySelector('.cs-toggle');
-    this.labelEl = rootEl.querySelector('.cs-label');
-    this.chevronEl = rootEl.querySelector('.cs-chevron');
-    this.menuEl = rootEl.querySelector('.cs-menu');
-    this.chevronEl.innerHTML = Icon.chevronDown();
-    this.toggleBtn.onclick = () => {
-      if (this.disabled) return;
-      this.menuEl.hidden ? this.open() : this.close();
-    };
-    document.addEventListener('click', (e) => {
-      if (!this.root.contains(e.target)) this.close();
-    });
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !this.menuEl.hidden) {
-        e.stopPropagation();
-        this.close();
-      }
-    }, true);
-  }
-
-  _labelOf(value) {
-    const item = this.items.find(i => i.value === value);
-    return item ? item.label : (this.items[0] ? this.items[0].label : '');
-  }
-
-  _renderToggle() {
-    this.labelEl.textContent = this._labelOf(this.value);
-    this.toggleBtn.disabled = this.disabled;
-    this.toggleBtn.title = this.disabled ? this.title : '';
-    this.root.classList.toggle('cs-disabled', this.disabled);
-  }
-
-  _renderMenu() {
-    this.menuEl.innerHTML = '';
-    for (const item of this.items) {
-      const el = document.createElement('div');
-      el.className = 'dropdown-item cs-option' + (item.value === this.value ? ' active' : '');
-      el.style.paddingLeft = (10 + (item.depth || 0) * 14) + 'px';
-      const label = document.createElement('span');
-      label.className = 'cs-option-label';
-      label.textContent = item.label;
-      el.appendChild(label);
-      if (item.value === this.value) {
-        const check = document.createElement('span');
-        check.className = 'cs-check';
-        check.innerHTML = Icon.check();
-        el.appendChild(check);
-      }
-      el.onclick = () => {
-        this.value = item.value;
-        this.close();
-        this._renderToggle();
-        this._renderMenu();
-        if (this.onchange) this.onchange(this.value);
-      };
-      this.menuEl.appendChild(el);
-    }
-  }
-
-  // 重设选项(选中值重置为 selected 或第一项),不触发 onchange
-  setOptions(items, selected) {
-    this.items = items || [];
-    const valid = selected !== undefined && this.items.some(i => i.value === selected);
-    this.value = valid ? selected : (this.items[0] ? this.items[0].value : '');
-    this._renderToggle();
-    this._renderMenu();
-    this.close();
-  }
-
-  // 程序赋值(不触发 onchange,同原生 select.value)
-  setValue(value) {
-    this.value = value;
-    this._renderToggle();
-    this._renderMenu();
-  }
-
-  getValue() { return this.value; }
-
-  setDisabled(disabled, title = '') {
-    this.disabled = disabled;
-    this.title = title;
-    if (disabled) this.close();
-    this._renderToggle();
-  }
-
-  open() {
-    this._renderMenu();
-    this.menuEl.hidden = false;
-    this.root.classList.add('cs-open');
-    const activeEl = this.menuEl.querySelector('.cs-option.active');
-    if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
-  }
-
-  close() {
-    this.menuEl.hidden = true;
-    this.root.classList.remove('cs-open');
-  }
-}
-
 const Main = {
   state: {
     todos: [],
@@ -139,8 +23,6 @@ const Main = {
     bulkSelected: new Set(),
   },
   editingId: null,
-  confirmResolver: null,
-  confirmPreviousFocus: null,
   promptResolver: null,
   promptPreviousFocus: null,
 
@@ -188,7 +70,7 @@ const Main = {
       this.renderGroupBar();
     } catch (e) {
       console.error(e);
-      alert('加载失败:' + window.__tauriErrMsg(e));
+      Main.notify('加载失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -203,7 +85,7 @@ const Main = {
       }
     } catch (e) {
       console.error('auto archive failed:', e);
-      alert('自动归档失败:' + window.__tauriErrMsg(e));
+      Main.notify('自动归档失败:' + window.__tauriErrMsg(e));
     } finally {
       this.state.archiveCheckPending = false;
     }
@@ -216,13 +98,15 @@ const Main = {
       this.state.archivedTodos = this.state.historyAllTodos.filter(todo => todo.archivedAt);
       Render.renderHistory(this.state);
     } catch (e) {
-      alert('加载归档记录失败:' + window.__tauriErrMsg(e));
+      Main.notify('加载归档记录失败:' + window.__tauriErrMsg(e));
     }
   },
 
   // 跨窗口事件:备忘小窗的增删改同步主窗口数据;任一窗口改设置后同步本地状态
   listenCrossWindowEvents() {
     const { listen } = window.__TAURI__.event;
+    listen('reminder-open-todo', async (event) => { await this.reload(); this.openEdit(event.payload); });
+    listen('reminder-error', (event) => this.alertAction({ title: '提醒暂不可用', message: event.payload }));
     listen('storage-error', (event) => this.alertAction({ title: '数据操作失败', message: event.payload }));
     listen('memos-changed', () => Memo.load());
     listen('todos-changed', () => this.reload());
@@ -276,7 +160,7 @@ const Main = {
       await this.confirmAction({
         title: '恢复失败',
         messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
-        confirmText: '知道了',
+        confirmText: '已知晓',
         hideCancel: true,
         danger: true,
       });
@@ -297,7 +181,7 @@ const Main = {
       await API.deleteArchived(id);
       await this.loadHistory();
     } catch (e) {
-      alert('永久删除失败:' + window.__tauriErrMsg(e));
+      Main.notify('永久删除失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -449,7 +333,7 @@ const Main = {
       this._subtreeHasMatchRoot(r.id, matchRootIds)
     );
     if (!roots.length) {
-      alert('没有符合条件的归档');
+      Main.notify('没有符合条件的归档');
       return;
     }
     const total = this._countSubtree(roots);
@@ -468,7 +352,7 @@ const Main = {
       this.closeRangeDeleteModal();
       await this.loadHistory();
     } catch (e) {
-      alert('永久删除失败:' + window.__tauriErrMsg(e));
+      Main.notify('永久删除失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -503,7 +387,7 @@ const Main = {
       this.closeDeleteAllModal();
       await this.loadHistory();
     } catch (e) {
-      alert('永久删除失败:' + window.__tauriErrMsg(e));
+      Main.notify('永久删除失败:' + window.__tauriErrMsg(e));
     } finally {
       btn.disabled = false;
       btn.textContent = originalText;
@@ -528,7 +412,7 @@ const Main = {
       await this.confirmAction({
         title: '归档失败',
         messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
-        confirmText: '知道了',
+        confirmText: '已知晓',
         hideCancel: true,
         danger: true,
       });
@@ -749,7 +633,7 @@ const Main = {
       await this.confirmAction({
         title: '无法归档',
         messageHtml: `<div class="confirm-message-bulk">${reason}</div>`,
-        confirmText: '知道了',
+        confirmText: '已知晓',
         hideCancel: true,
       });
       return;
@@ -796,7 +680,7 @@ const Main = {
       await this.confirmAction({
         title: '批量归档失败',
         messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
-        confirmText: '知道了',
+        confirmText: '已知晓',
         hideCancel: true,
         danger: true,
       });
@@ -820,7 +704,7 @@ const Main = {
       await this.reload();
       this.exitBulkMode();
     } catch (e) {
-      alert('批量删除失败:' + window.__tauriErrMsg(e));
+      Main.notify('批量删除失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -857,7 +741,10 @@ const Main = {
     ['Start', 'End', 'Done'].forEach((key) => {
       const chk = document.getElementById('beChk' + key);
       const field = chk.closest('.bulk-edit-field');
-      if (field) field.classList.toggle('unchecked', !chk.checked);
+      if (field) {
+        field.classList.toggle('unchecked', !chk.checked);
+        field.querySelectorAll('input:not([type="checkbox"]),select,.time-toggle').forEach(control => { control.disabled = !chk.checked; });
+      }
     });
   },
 
@@ -868,6 +755,7 @@ const Main = {
       const val = document.getElementById('beFStart').value;
       if (val) {
         const inputType = document.getElementById('beFStart').type;
+        patch.startHasTime = inputType === 'datetime-local';
         patch.startTime = inputType === 'datetime-local'
           ? Render.localInputToISO(val)
           : Render.localDateToISO(val);
@@ -879,6 +767,7 @@ const Main = {
       const val = document.getElementById('beFEnd').value;
       if (val) {
         const inputType = document.getElementById('beFEnd').type;
+        patch.endHasTime = inputType === 'datetime-local';
         patch.endTime = inputType === 'datetime-local'
           ? Render.localInputToISO(val)
           : Render.localDateToISO(val);
@@ -893,7 +782,7 @@ const Main = {
       else patch.completedAt = null;
     }
     if (!Object.keys(patch).length) {
-      alert('请至少勾选一个要修改的字段');
+      Main.notify('请至少勾选一个要修改的字段');
       return;
     }
     try {
@@ -904,7 +793,7 @@ const Main = {
       await this.reload();
       this.exitBulkMode();
     } catch (e) {
-      alert('批量修改失败:' + window.__tauriErrMsg(e));
+      Main.notify('批量修改失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -1082,7 +971,7 @@ const Main = {
     const id = this._editingGroupId;
     const name = document.getElementById('fGroupEditName').value.trim();
     const color = this._pendingGroupColor || null;
-    if (!name) { alert('请输入分组名称'); return; }
+    if (!name) { Main.notify('请输入分组名称', 'fGroupEditName'); return; }
     try {
       if (id === '__default__') {
         await this.patchSettings({ defaultGroupName: name, defaultGroupColor: color });
@@ -1100,7 +989,7 @@ const Main = {
       }
       this.closeGroupModal();
       await this.reload();
-    } catch (e) { alert('保存分组失败:' + window.__tauriErrMsg(e)); }
+    } catch (e) { Main.notify('保存分组失败:' + window.__tauriErrMsg(e)); }
   },
 
   async deleteGroupFromModal() {
@@ -1119,7 +1008,7 @@ const Main = {
       if (this.state.activeGroup === id) this.state.activeGroup = '__all__';
       this.closeGroupModal();
       await this.reload();
-    } catch (e) { alert('删除分组失败:' + window.__tauriErrMsg(e)); }
+    } catch (e) { Main.notify('删除分组失败:' + window.__tauriErrMsg(e)); }
   },
 
   applySettingsToDom() {
@@ -1179,7 +1068,7 @@ const Main = {
       if ('startTime' in patch || 'endTime' in patch || 'parentId' in patch) await this.reload();
       if ('done' in patch) await this.checkArchiveDue();
     } catch (e) {
-      alert('保存失败:' + window.__tauriErrMsg(e));
+      Main.notify('保存失败:' + window.__tauriErrMsg(e));
       this.reload();
     }
   },
@@ -1242,7 +1131,7 @@ const Main = {
       this.state.todos = data.todos || [];
     } catch (e) {
       for (const item of before) item.todo.expanded = item.expanded;
-      alert('保存失败:' + window.__tauriErrMsg(e));
+      Main.notify('保存失败:' + window.__tauriErrMsg(e));
     } finally {
       this.state.bulkExpandPending = false;
       Render.renderAll(this.state);
@@ -1376,7 +1265,7 @@ const Main = {
       await this.confirmAction({
         title: '移动失败',
         messageHtml: `<div class="confirm-message-bulk">${window.__tauriErrMsg(e)}</div>`,
-        confirmText: '知道了',
+        confirmText: '已知晓',
         hideCancel: true,
         danger: true,
       });
@@ -1407,7 +1296,7 @@ const Main = {
     } catch (e) {
       this.state.todos = before;
       Render.renderAll(this.state);
-      alert('移动分组失败:' + window.__tauriErrMsg(e));
+      Main.notify('移动分组失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -1425,7 +1314,7 @@ const Main = {
     try {
       await API.reorderGroups(groups.map(g => g.id));
     } catch (e) {
-      alert('分组排序失败:' + window.__tauriErrMsg(e));
+      Main.notify('分组排序失败:' + window.__tauriErrMsg(e));
       await this.reload();
     }
   },
@@ -1477,7 +1366,7 @@ const Main = {
       }
       await this.checkArchiveDue();
     } catch (e) {
-      alert('保存失败:' + window.__tauriErrMsg(e));
+      Main.notify('保存失败:' + window.__tauriErrMsg(e));
       this.reload();
     }
   },
@@ -1521,7 +1410,7 @@ const Main = {
       this.applySettingsToDom();
       this.refreshDropdownValues();
       Render.renderAll(this.state);
-      alert('保存设置失败:' + window.__tauriErrMsg(e));
+      Main.notify('保存设置失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -1541,7 +1430,7 @@ const Main = {
       Render.renderAll(this.state);
       await this.checkArchiveDue();
     } catch (e) {
-      alert('重置失败:' + window.__tauriErrMsg(e));
+      Main.notify('重置失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -1661,7 +1550,7 @@ const Main = {
         });
         if (confirmed) {
           this.closeHelp();
-          API.openExternal(releaseUrl).catch(err => alert('打开失败: ' + err));
+          API.openExternal(releaseUrl).catch(err => Main.notify('打开失败: ' + err));
         }
       } else {
         box.className = 'help-update ok';
@@ -1710,51 +1599,17 @@ const Main = {
     document.body.classList.remove('modal-open');
   },
 
-  // 应用内样式提示(单按钮"知道了"),替代原生 alert
+  // All windows share queued, themed dialogs, including the startup recovery path.
+  notify(message, focusTarget) {
+    return AppDialog.alert(message, { focusTarget });
+  },
+
   alertAction(opt) {
-    return this.confirmAction({ confirmText: '知道了', hideCancel: true, title: '提示', ...opt });
+    return AppDialog.confirm({ confirmText: '已知晓', hideCancel: true, title: '提示', ...opt });
   },
 
-  confirmAction({ title = '确认操作', message, messageHtml, confirmText = '确认', danger = false, hideCancel = false }) {
-    if (this.confirmResolver) this.closeConfirm(false);
-
-    const mask = document.getElementById('confirmMask');
-    const modal = mask.querySelector('.confirm-modal');
-    const accept = document.getElementById('btnConfirmAccept');
-    const cancel = document.getElementById('btnConfirmCancel');
-    this.confirmPreviousFocus = document.activeElement;
-    document.getElementById('confirmTitle').textContent = title;
-    const msgEl = document.getElementById('confirmMessage');
-    if (messageHtml != null) {
-      msgEl.innerHTML = messageHtml;
-    } else {
-      msgEl.textContent = message;
-    }
-    if (cancel) cancel.hidden = hideCancel;
-    document.getElementById('confirmIcon').innerHTML = danger ? Icon.trash() : Icon.info();
-    accept.textContent = confirmText;
-    accept.className = danger ? 'btn confirm-danger' : 'btn primary';
-    modal.classList.toggle('danger', danger);
-    mask.hidden = false;
-
-    return new Promise(resolve => {
-      this.confirmResolver = resolve;
-      requestAnimationFrame(() => accept.focus());
-    });
-  },
-
-  closeConfirm(confirmed = false) {
-    const resolver = this.confirmResolver;
-    if (!resolver) return;
-
-    this.confirmResolver = null;
-    document.getElementById('confirmMask').hidden = true;
-    resolver(confirmed);
-
-    const previousFocus = this.confirmPreviousFocus;
-    this.confirmPreviousFocus = null;
-    if (previousFocus?.isConnected) requestAnimationFrame(() => previousFocus.focus());
-  },
+  confirmAction(options) { return AppDialog.confirm(options); },
+  closeConfirm(confirmed = false) { AppDialog.close(confirmed); },
 
   runHolidayUpdateWithProgress() {
     if (this._holidayUpdating) return Promise.resolve();
@@ -1885,7 +1740,7 @@ const Main = {
         closeBtn.disabled = true;
         setTimeout(() => {
           close();
-          this.confirmAction({ title: '更新成功', message: msg, confirmText: '知道了', hideCancel: true });
+          this.confirmAction({ title: '更新成功', message: msg, confirmText: '已知晓', hideCancel: true });
         }, 800);
       })
       .catch((err) => {
@@ -1948,7 +1803,9 @@ const Main = {
     });
     const content = document.getElementById('settingsContent');
     const scrollTop = content.scrollTop;
+    AppPopover.close();
     content.innerHTML = this._settingsTabHtml(tab, s);
+    AppUI.enhance(content);
     // 改设置项触发的重渲染保持滚动位置;重开/切页签才回顶部(需容器可见,否则 scrollTop 赋值无效)
     content.scrollTop = resetScroll ? 0 : scrollTop;
     Icon.render(content);
@@ -2041,6 +1898,7 @@ const Main = {
   },
 
   _settingsTabHtml(tab, s) {
+    if (tab === 'reminders') return ReminderSettings.html(s.reminders);
     if (tab === 'general') {
       return `
         <div class="settings-content-title">通用</div>
@@ -2468,6 +2326,7 @@ const Main = {
   },
 
   _bindSettingsContent(tab, s) {
+    if (tab === 'reminders') { ReminderSettings.bind(this); return; }
     const content = document.getElementById('settingsContent');
 
     // segmented
@@ -2603,7 +2462,7 @@ const Main = {
         const path = await API.pickSavePath(`todocalendar-data-${date}.json`);
         if (!path) return;
         await API.exportDataToPath(path);
-        alert(`导出成功: ${path}`);
+        Main.notify(`导出成功: ${path}`);
       } else if (action === 'importJson') {
         const path = await API.pickOpenPath();
         if (!path) return;
@@ -2620,7 +2479,7 @@ const Main = {
         await API.importDataFromPath(path, scope);
         await this.reload();
         if (scope === 'data') await Memo.load();
-        alert('导入成功');
+        Main.notify('导入成功');
       } else if (action === 'exportBackup') {
         const path = await API.pickSavePath('todocalendar-full-backup.json');
         if (!path) return;
@@ -2641,10 +2500,10 @@ const Main = {
         await this.alertAction({ title: '恢复成功', message: '恢复前副本：' + saved });
       } else if (action === 'reloadData') {
         await this.reload();
-        alert('已重新加载');
+        Main.notify('已重新加载');
       }
     } catch (e) {
-      alert('操作失败:' + window.__tauriErrMsg(e));
+      Main.notify('操作失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -2685,11 +2544,7 @@ const Main = {
         const target = document.getElementById(el.dataset.target);
         if (!target) return;
         e.preventDefault();
-        if (typeof target.showPicker === 'function') {
-          try { target.showPicker(); } catch (err) { target.focus(); }
-        } else {
-          target.focus();
-        }
+        AppDatePicker.open(target, AppUI.dates.get(target)?.trigger || target);
       });
     });
 
@@ -2858,11 +2713,7 @@ const Main = {
         const target = document.getElementById(el.dataset.target);
         if (!target) return;
         e.preventDefault();
-        if (typeof target.showPicker === 'function') {
-          try { target.showPicker(); } catch (err) { target.focus(); }
-        } else {
-          target.focus();
-        }
+        AppDatePicker.open(target, AppUI.dates.get(target)?.trigger || target);
       });
     });
     this._installAllDateDisplays();
@@ -2938,7 +2789,7 @@ const Main = {
       const el = document.getElementById(item.id);
       el.innerHTML = `${item.icon}<span>${item.label}</span>`;
       if (item.external) {
-        el.onclick = (e) => { e.preventDefault(); API.openExternal(item.url).catch(err => alert('打开失败: ' + err)); };
+        el.onclick = (e) => { e.preventDefault(); API.openExternal(item.url).catch(err => Main.notify('打开失败: ' + err)); };
       } else {
         el.onclick = (e) => { e.preventDefault(); this.openAppreciate(); };
       }
@@ -3001,21 +2852,8 @@ const Main = {
     // ESC: confirm > modal > settings > history > dayView
     document.addEventListener('keydown', (e) => {
       const confirmMask = document.getElementById('confirmMask');
-      if (!confirmMask.hidden && e.key === 'Tab') {
-        const buttons = [
-          document.getElementById('btnConfirmCancel'),
-          document.getElementById('btnConfirmAccept'),
-        ];
-        const current = buttons.indexOf(document.activeElement);
-        const next = e.shiftKey
-          ? (current <= 0 ? buttons.length - 1 : current - 1)
-          : (current < 0 || current === buttons.length - 1 ? 0 : current + 1);
-        e.preventDefault();
-        buttons[next].focus();
-        return;
-      }
       if (e.key !== 'Escape') return;
-      if (!confirmMask.hidden) { this.closeConfirm(false); return; }
+      if (!confirmMask.hidden) return;
       const promptMask = document.getElementById('promptMask');
       if (!promptMask.hidden) { this.closePrompt({ type: 'cancel', value: '' }); return; }
       const memoMask = document.getElementById('memoEditMask');
@@ -3271,7 +3109,7 @@ const Main = {
       : Render.localDateToISO(input.value);
   },
 
-  _writeInput(inputId, iso) {
+  _writeInput(inputId, iso, precision) {
     const input = document.getElementById(inputId);
     if (!iso) {
       this._setInputPrecision(inputId, false);
@@ -3286,7 +3124,7 @@ const Main = {
       this._renderDateDisplay(inputId);
       return;
     }
-    const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0;
+    const hasTime = precision ?? (d.getHours() !== 0 || d.getMinutes() !== 0);
     this._setInputPrecision(inputId, hasTime);
     input.value = hasTime ? Render.isoToLocalInput(iso) : Render.isoToLocalDate(iso);
     this._renderDateDisplay(inputId);
@@ -3309,6 +3147,7 @@ const Main = {
   },
 
   _renderDateDisplay(inputId) {
+    if (typeof AppUI !== 'undefined') AppUI.sync(document.getElementById(inputId));
     const input = document.getElementById(inputId);
     if (!input) return;
     const display = document.querySelector(`[data-display-for="${inputId}"]`);
@@ -3491,11 +3330,11 @@ const Main = {
   async saveBulkTreeModal() {
     const parsed = this._parseTreeTitles();
     if (parsed.length === 0) {
-      alert('请至少输入一个标题');
+      Main.notify('请至少输入一个标题');
       return;
     }
     if (parsed[0].depth !== 0) {
-      alert('第一行必须是顶层待办(无缩进)');
+      Main.notify('第一行必须是顶层待办(无缩进)');
       return;
     }
     const startInput = document.getElementById('fTreeStart');
@@ -3509,11 +3348,11 @@ const Main = {
     const startTime = readField(startInput);
     const endTime = readField(endInput);
     if (endTime && !startTime) {
-      alert('请先设置开始时间');
+      Main.notify('请先设置开始时间');
       return;
     }
     if (startTime && endTime && new Date(endTime) < new Date(startTime)) {
-      alert('截止时间不能早于开始时间');
+      Main.notify('截止时间不能早于开始时间', 'fTreeEnd');
       return;
     }
 
@@ -3535,6 +3374,8 @@ const Main = {
           title: item.title,
           startTime,
           endTime,
+          startHasTime: startInput.type === 'datetime-local',
+          endHasTime: endInput.type === 'datetime-local',
           parentId,
           groupId: parentId ? null : rootGroupId,
         });
@@ -3547,7 +3388,7 @@ const Main = {
       this.closeBulkTreeModal();
       await this.reload();
     } catch (e) {
-      alert('创建失败:' + window.__tauriErrMsg(e));
+      Main.notify('创建失败:' + window.__tauriErrMsg(e));
     } finally {
       btn.disabled = false;
       btn.textContent = originalText;
@@ -3568,7 +3409,7 @@ const Main = {
   async saveBulkModal() {
     const titles = this._parseBulkTitles();
     if (titles.length === 0) {
-      alert('请至少输入一个标题');
+      Main.notify('请至少输入一个标题');
       return;
     }
     const startInput = document.getElementById('fBulkStart');
@@ -3576,11 +3417,11 @@ const Main = {
     const startRaw = startInput.value;
     const endRaw = endInput.value;
     if (endRaw && !startRaw) {
-      alert('请先设置开始时间');
+      Main.notify('请先设置开始时间');
       return;
     }
     if (startRaw && endRaw && new Date(endRaw) < new Date(startRaw)) {
-      alert('截止时间不能早于开始时间');
+      Main.notify('截止时间不能早于开始时间', 'fBulkEnd');
       return;
     }
     const readBulk = (input) => {
@@ -3599,7 +3440,7 @@ const Main = {
     btn.textContent = '创建中...';
     try {
       for (const title of titles) {
-        await API.create({ title, startTime, endTime, parentId });
+        await API.create({ title, startTime, endTime, parentId, startHasTime: startInput.type === 'datetime-local', endHasTime: endInput.type === 'datetime-local' });
       }
       this.closeBulkModal();
       if (parentId) {
@@ -3610,7 +3451,7 @@ const Main = {
       }
       await this.reload();
     } catch (e) {
-      alert('批量创建失败:' + window.__tauriErrMsg(e));
+      Main.notify('批量创建失败:' + window.__tauriErrMsg(e));
       await this.reload();
     } finally {
       btn.disabled = false;
@@ -3624,8 +3465,8 @@ const Main = {
     this.editingId = id;
     document.getElementById('modalTitle').textContent = '编辑待办';
     document.getElementById('fTitle').value = t.title || '';
-    this._writeInput('fStart', t.startTime);
-    this._writeInput('fEnd', t.endTime);
+    this._writeInput('fStart', t.startTime, t.startHasTime);
+    this._writeInput('fEnd', t.endTime, t.endHasTime);
     // badge 仅父代办显示,且对应全局开关开启 + 时间匹配所有子代办的 min/max
     const children = this.state.todos.filter(x => x.parentId === id);
     const startBadge = document.getElementById('fStartAutoBadge');
@@ -3782,25 +3623,25 @@ const Main = {
 
   async saveModal() {
     const title = document.getElementById('fTitle').value.trim();
-    if (!title) { alert('请输入标题'); return; }
+    if (!title) { Main.notify('请输入标题', 'fTitle'); return; }
     const startRaw = document.getElementById('fStart').value;
     const endRaw = document.getElementById('fEnd').value;
     const parentId = this.parentSelect.getValue() || null;
 
     if (endRaw && !startRaw) {
-      alert('请先设置开始时间');
+      Main.notify('请先设置开始时间');
       return;
     }
     if (startRaw && endRaw && new Date(endRaw) < new Date(startRaw)) {
-      alert('截止时间不能早于开始时间');
+      Main.notify('截止时间不能早于开始时间', 'fEnd');
       return;
     }
 
     if (parentId && this.editingId) {
-      if (parentId === this.editingId) { alert('不能把待办设成自己的子级'); return; }
+      if (parentId === this.editingId) { Main.notify('不能把待办设成自己的子级'); return; }
       let p = this.state.todos.find(x => x.id === parentId);
       while (p) {
-        if (p.parentId === this.editingId) { alert('不能把待办挂到自己的子级下面(会成环)'); return; }
+        if (p.parentId === this.editingId) { Main.notify('不能把待办挂到自己的子级下面(会成环)'); return; }
         p = p.parentId ? this.state.todos.find(x => x.id === p.parentId) : null;
       }
     }
@@ -3808,7 +3649,9 @@ const Main = {
     const body = {
       title,
       startTime: this._readInput('fStart'),
+      startHasTime: document.getElementById('fStart').type === 'datetime-local',
       endTime: this._readInput('fEnd'),
+      endHasTime: document.getElementById('fEnd').type === 'datetime-local',
       parentId,
     };
     const notesRaw = this._notesEditor ? this._notesEditor.getValue() : (this._pendingNotesValue || '');
@@ -3846,7 +3689,7 @@ const Main = {
       this.closeModal();
       await this.reload();
     } catch (e) {
-      alert('保存失败:' + window.__tauriErrMsg(e));
+      Main.notify('保存失败:' + window.__tauriErrMsg(e));
     }
   },
 
@@ -3875,7 +3718,7 @@ const Main = {
       this.closeModal();
       await this.reload();
     } catch (e) {
-      alert('删除失败:' + window.__tauriErrMsg(e));
+      Main.notify('删除失败:' + window.__tauriErrMsg(e));
     }
   },
 };
