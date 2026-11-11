@@ -26,13 +26,13 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            enabled: false,
-            interval_minutes: 45,
+            enabled: true,
+            interval_minutes: 50,
             duration_minutes: 5,
             warning_seconds: 10,
-            mode: "normal".into(),
+            mode: "forced".into(),
             all_screens: true,
-            sound: "none".into(),
+            sound: "knock".into(),
             volume: 50,
             schedule: Schedule::default(),
         }
@@ -623,9 +623,7 @@ mod tests {
         r.config.interval_minutes = 1;
         r.config.schedule.enabled = false;
         r.window = Some(Window::unrestricted());
-        if forced {
-            r.config.mode = "forced".into();
-        }
+        r.config.mode = if forced { "forced" } else { "normal" }.into();
         r.reset(now);
         r
     }
@@ -637,11 +635,24 @@ mod tests {
     fn defaults_and_validation() {
         let c: Config = serde_json::from_str("{}").unwrap();
         assert_eq!(c, Config::default());
-        assert!(!c.enabled);
+        assert!(c.enabled);
+        assert_eq!(c.interval_minutes, 50);
+        assert_eq!(c.duration_minutes, 5);
+        assert_eq!(c.mode, "forced");
+        assert_eq!(c.warning_seconds, 10);
+        assert_eq!(c.sound, "knock");
+        assert_eq!(c.volume, 50);
         assert!(c.all_screens);
         assert_eq!(c.schedule.periods[0].end, "11:35");
         assert_eq!(c.schedule.periods[1].start, "13:30");
         assert!(c.schedule.enabled);
+        assert_eq!(c.schedule.day_mode, "workday");
+        assert_eq!(c.schedule.weekdays, vec![1, 2, 3, 4, 5]);
+        let existing: Config = serde_json::from_str(r#"{"enabled":false,"intervalMinutes":30,"mode":"normal","sound":"none"}"#).unwrap();
+        assert!(!existing.enabled);
+        assert_eq!(existing.interval_minutes, 30);
+        assert_eq!(existing.mode, "normal");
+        assert_eq!(existing.sound, "none");
         let mut c = c;
         c.duration_minutes = 0;
         assert!(c.validate().is_err());

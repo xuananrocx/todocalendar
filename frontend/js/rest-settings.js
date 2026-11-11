@@ -58,7 +58,7 @@ const RestSettings = {
       + '</div>';
   },
   html(value = {}, embedded = false) {
-    const r = { enabled:false, intervalMinutes:45, durationMinutes:5, warningSeconds:10, mode:'normal', allScreens:true, sound:'none', volume:50, ...value };
+    const r = { enabled:true, intervalMinutes:50, durationMinutes:5, warningSeconds:10, mode:'forced', allScreens:true, sound:'knock', volume:50, ...value };
     const row = (name, field) => `<div class="settings-row reminder-setting-row"><div class="rest-setting-label">${name}${this.helpButton(name)}</div>${field}</div>`;
     const toggle = (key, title) => row(title, `<button type="button" class="app-switch ${r[key]?'on':''}" role="switch" aria-checked="${!!r[key]}" aria-label="${title}" data-rest-switch="${key}"><span></span></button>`);
     const number = (key, title, max, unit = '分钟', min = 1) => row(title, `<span class="reminder-setting-field"><input aria-label="${title}" data-rest="${key}" type="number" min="${min}" max="${max}" step="1" required value="${Number(r[key])}"><span>${unit}</span></span>`);
