@@ -1663,11 +1663,25 @@ fn update_settings(app: tauri::AppHandle, patch: serde_json::Value) -> Result<Se
     let (old_enabled, old_mode) = (s.memo_enabled, s.memo_display_mode.clone());
 
     let obj = patch.as_object().ok_or_else(|| "设置更新必须是 JSON 对象".to_string())?;
+    if obj.get("reminders").and_then(|r| r.get("newGroupEnabled"))
+        .and_then(Value::as_bool).is_some_and(|v| v != s.reminders.new_group_enabled) {
+        let data = load_data(&app_dir(&app)?.join("todos.json"))?;
+        s.reminders.preserve_existing_groups(&data);
+    }
     let mut cur = serde_json::to_value(&s).map_err(|e| e.to_string())?;
     for (k, v) in obj {
         if k == "reminders" {
             let fields = v.as_object().ok_or("提醒设置必须是对象")?;
-            for (field,value) in fields { cur["reminders"].as_object_mut().unwrap().insert(field.clone(),value.clone()); }
+            for (field, value) in fields {
+                if field == "groupEnabled" {
+                    let groups = value.as_object().ok_or("分组提醒设置必须是对象")?;
+                    for (id, enabled) in groups {
+                        cur["reminders"]["groupEnabled"].as_object_mut().unwrap().insert(id.clone(), enabled.clone());
+                    }
+                } else {
+                    cur["reminders"].as_object_mut().unwrap().insert(field.clone(), value.clone());
+                }
+            }
         } else { cur.as_object_mut().unwrap().insert(k.clone(), v.clone()); }
     }
     s = serde_json::from_value(cur).map_err(|e| format!("设置字段格式异常：{}", e))?;
@@ -2181,6 +2195,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             reminders::reminder_snapshot,
+            reminders::reminder_resize,
             reminders::reminder_action,
             reminders::reminder_ready,
             reminders::reminder_open_todo,

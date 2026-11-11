@@ -409,7 +409,7 @@ const AppUI = {
       if(c&&e.key==='Escape'){e.preventDefault();e.stopImmediatePropagation();AppPopover.close(true);return;}
       if(c&&e.key==='Tab'){
         if(c.owner instanceof CustomSelect){const next=c.anchor;AppPopover.close();next.focus();return;}
-        const nodes=[...c.panel.querySelectorAll('button:not(:disabled),input:not(:disabled),[role="listbox"]')].filter(n=>n.tabIndex!==-1);
+        const nodes=[...c.panel.querySelectorAll('button:not(:disabled),input:not(:disabled),[role="listbox"]')].filter(n=>n.tabIndex!==-1 && n.getClientRects().length);
         const current=nodes.indexOf(document.activeElement);e.preventDefault();nodes[(current+(e.shiftKey?-1:1)+nodes.length)%nodes.length]?.focus();return;
       }
       if(!AppDialog.active)return;

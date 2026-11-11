@@ -1,4 +1,43 @@
 use super::reminders::{Config, Item};
+use chrono::{DateTime, Local, NaiveDate, TimeZone};
+
+fn elapsed_days(item: &Item, today: NaiveDate) -> Option<i64> {
+    NaiveDate::parse_from_str(&item.date, "%Y-%m-%d").ok()
+        .map(|date| today.signed_duration_since(date).num_days())
+}
+
+fn overdue(item: &Item, now: &DateTime<Local>) -> bool {
+    item.is_overdue(now)
+}
+
+// Text also acts as the scheduler's change marker: midnight updates are silent.
+pub(crate) fn notification_text(items: &[Item], now: &DateTime<Local>) -> (String, String) {
+    if let [item] = items {
+        let kind = if item.kind == "end" { "截止" } else { "开始" };
+        let body = if item.date_only {
+            let status = match elapsed_days(item, now.date_naive()) {
+                Some(days) if days > 0 => format!("{} {days} 天", if item.kind == "end" { "已逾期" } else { "已开始" }),
+                Some(0) => format!("今日{kind}"),
+                _ => format!("{kind}提醒"),
+            };
+            format!("{status} · {} {kind} · 仅日期 · 点击查看提醒", item.date)
+        } else {
+            let status = if item.target <= now.timestamp() {
+                if item.kind == "end" { "已逾期" } else { "已开始" }
+            } else if item.kind == "end" { "即将截止" } else { "即将开始" };
+            let target = Local.timestamp_opt(item.target, 0).single()
+                .map(|date| date.format("%Y-%m-%d %H:%M").to_string())
+                .unwrap_or_else(|| item.date.clone());
+            format!("{status} · {target} {kind} · 点击查看提醒")
+        };
+        (format!("{kind}提醒 · {}", item.title), body)
+    } else {
+        let count = items.iter().filter(|item| overdue(item, now)).count();
+        let status = if count > 0 { format!("，其中 {count} 项已逾期") } else { String::new() };
+        (format!("有 {} 项待办需要关注", items.len()),
+         format!("共 {} 项提醒{status} · 点击查看并处理", items.len()))
+    }
+}
 
 #[cfg(windows)]
 mod platform {
@@ -107,35 +146,11 @@ mod platform {
             result
         }
     }
-    pub fn notify(app: &tauri::AppHandle, items: &[Item], cfg: &Config) -> Result<(), String> {
+    pub fn notify(app: &tauri::AppHandle, items: &[Item], fresh: &[Item], cfg: &Config, silent: bool) -> Result<(), String> {
+        if items.is_empty() { clear(app); return Ok(()); }
         register(app)?;
-        let title = if items.len() == 1 {
-            format!(
-                "{}提醒 · {}",
-                if items[0].kind == "start" {
-                    "开始"
-                } else {
-                    "截止"
-                },
-                items[0].title
-            )
-        } else {
-            format!("有 {} 项待办需要关注", items.len())
-        };
-        let body = if items.len() == 1 {
-            format!(
-                "{} · {} · 点击查看提醒",
-                items[0].date,
-                if items[0].date_only {
-                    "仅日期"
-                } else {
-                    "有具体时间"
-                }
-            )
-        } else {
-            "错过的提醒已合并，点击查看并处理".into()
-        };
-        let audio = if cfg.sound == "system" && !quiet() {
+        let (title, body) = notification_text(items, &Local::now());
+        let audio = if !silent && cfg.sound == "system" && !quiet() {
             "<audio src=\"ms-winsoundevent:Notification.Default\"/>"
         } else {
             "<audio silent=\"true\"/>"
@@ -146,6 +161,7 @@ mod platform {
             let toast = ToastNotification::CreateToastNotification(&doc)?;
             toast.SetTag(&HSTRING::from("pending"))?;
             toast.SetGroup(&HSTRING::from("reminders"))?;
+            toast.SetSuppressPopup(silent)?;
             let h = app.clone();
             toast.Activated(&TypedEventHandler::new(move |_, _| {
                 let h = h.clone();
@@ -159,8 +175,8 @@ mod platform {
                 Ok(())
             }))?;
             let failed_app = app.clone();
-            let failed_items = items.to_vec();
-            let only_system = !cfg.popup;
+            let failed_items = fresh.to_vec();
+            let only_system = !cfg.popup && !silent;
             toast.Failed(&TypedEventHandler::<
                 ToastNotification,
                 windows::UI::Notifications::ToastFailedEventArgs,
@@ -191,7 +207,7 @@ mod platform {
                 _ => {}
             }
             notifier.Show(&toast)?;
-            eprintln!("[toast] accepted");
+            eprintln!("[toast] accepted items={} fresh={} silent={}", items.len(), fresh.len(), silent);
             *TOAST.lock().unwrap() = Some(toast);
             Ok(())
         })();
@@ -285,7 +301,7 @@ pub fn single_instance(_: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 #[cfg(not(windows))]
-pub fn notify(_: &tauri::AppHandle, _: &[Item], _: &Config) -> Result<(), String> {
+pub fn notify(_: &tauri::AppHandle, _: &[Item], _: &[Item], _: &Config, _: bool) -> Result<(), String> {
     Err("系统通知暂仅支持 Windows".into())
 }
 #[cfg(not(windows))]
@@ -296,5 +312,64 @@ pub fn sound(cfg: &Config) -> Result<(), String> {
         Ok(())
     } else {
         Err("提示音暂仅支持 Windows".into())
+    }
+}
+
+// Keep the existing notification in sync without replaying its banner or audio.
+pub fn sync(app: &tauri::AppHandle, items: &[Item], cfg: &Config) -> Result<(), String> {
+    if items.is_empty() || !cfg.enabled || !cfg.system {
+        clear(app);
+        Ok(())
+    } else {
+        notify(app, items, &[], cfg, true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn item(date: &str, kind: &str) -> Item {
+        serde_json::from_value(serde_json::json!({"key":"test","todoId":"test","title":"Test","path":"Work","kind":kind,"target":0,"dateOnly":true,"date":date,"batch":1,"count":1,"due":0})).unwrap()
+    }
+    fn local(time: &str) -> DateTime<Local> {
+        Local.from_local_datetime(&chrono::NaiveDateTime::parse_from_str(time, "%Y-%m-%d %H:%M:%S").unwrap()).earliest().unwrap()
+    }
+    #[test]
+    fn date_deadline_is_overdue_only_after_local_midnight() {
+        let i = item("2026-11-10", "end");
+        for time in ["2026-11-10 00:00:00", "2026-11-10 09:31:00", "2026-11-10 23:59:59"] {
+            let now = local(time);
+            assert!(!overdue(&i, &now));
+            assert!(notification_text(&[i.clone()], &now).1.contains("今日截止"));
+        }
+        let now = local("2026-11-11 00:00:00");
+        assert!(overdue(&i, &now));
+        assert!(notification_text(&[i], &now).1.contains("已逾期 1 天 · 2026-11-10 截止"));
+    }
+    #[test]
+    fn date_counts_cross_years_and_leap_days_and_keep_start_semantics() {
+        assert_eq!(elapsed_days(&item("2025-12-31", "end"), NaiveDate::from_ymd_opt(2026, 1, 1).unwrap()), Some(1));
+        assert_eq!(elapsed_days(&item("2024-02-28", "end"), NaiveDate::from_ymd_opt(2024, 3, 1).unwrap()), Some(2));
+        let i = item("2026-11-08", "start");
+        let now = local("2026-11-11 12:00:00");
+        assert!(!overdue(&i, &now));
+        assert!(notification_text(&[i], &now).1.contains("已开始 3 天"));
+    }
+    #[test]
+    fn summary_counts_only_overdue_deadlines_and_changes_at_midnight() {
+        let items = vec![item("2026-11-10", "end"), item("2026-11-09", "end"), item("2026-11-08", "start")];
+        let before = notification_text(&items, &local("2026-11-10 23:59:59"));
+        let after = notification_text(&items, &local("2026-11-11 00:00:00"));
+        assert!(before.1.contains("共 3 项提醒，其中 1 项已逾期"));
+        assert!(after.1.contains("共 3 项提醒，其中 2 项已逾期"));
+        assert_ne!(before, after);
+        assert_eq!(after, notification_text(&items, &local("2026-11-11 00:00:02")));
+    }
+    #[test]
+    fn timed_notification_retains_time_and_switches_status_at_target() {
+        let mut i = item("2026-11-11", "end");
+        i.date_only = false; i.target = local("2026-11-11 10:30:00").timestamp();
+        assert!(notification_text(&[i.clone()], &local("2026-11-11 10:29:59")).1.contains("即将截止 · 2026-11-11 10:30"));
+        assert!(notification_text(&[i], &local("2026-11-11 10:30:00")).1.contains("已逾期 · 2026-11-11 10:30"));
     }
 }

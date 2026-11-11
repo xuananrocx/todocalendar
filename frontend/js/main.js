@@ -1898,7 +1898,7 @@ const Main = {
   },
 
   _settingsTabHtml(tab, s) {
-    if (tab === 'reminders') return ReminderSettings.html(s.reminders);
+    if (tab === 'reminders') return ReminderSettings.html(s.reminders, this.state.groups, s);
     if (tab === 'general') {
       return `
         <div class="settings-content-title">通用</div>

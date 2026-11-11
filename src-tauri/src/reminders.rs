@@ -26,6 +26,9 @@ pub struct Config {
     pub snooze_minutes: u32,
     pub sound: String,
     pub volume: u32,
+    pub default_group_enabled: bool,
+    pub new_group_enabled: bool,
+    pub group_enabled: BTreeMap<String, bool>,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -45,10 +48,28 @@ impl Default for Config {
             snooze_minutes: 10,
             sound: "knock".into(),
             volume: 50,
+            default_group_enabled: true,
+            new_group_enabled: true,
+            group_enabled: BTreeMap::new(),
         }
     }
 }
 impl Config {
+    pub fn group_is_enabled(&self, group_id: Option<&str>) -> bool {
+        match group_id {
+            None => self.default_group_enabled,
+            Some(id) => self.group_enabled.get(id).copied().unwrap_or(self.new_group_enabled),
+        }
+    }
+
+    // Freeze existing groups before changing the default for future groups.
+    // Keeping this in the settings transaction avoids a second write to todos.json.
+    pub fn preserve_existing_groups(&mut self, data: &Data) {
+        for group in &data.groups {
+            self.group_enabled.entry(group.id.clone()).or_insert(self.new_group_enabled);
+        }
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         if !["both", "start", "end"].contains(&self.scope.as_str())
             || !["ack", "shown"].contains(&self.policy.as_str())
@@ -116,6 +137,30 @@ pub struct Item {
     pub count: u32,
     pub due: i64,
 }
+impl Item {
+    pub fn is_overdue(&self, now: &DateTime<Local>) -> bool {
+        self.kind == "end" && if self.date_only {
+            NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").ok()
+                .is_some_and(|date| date < now.date_naive())
+        } else { self.target <= now.timestamp() }
+    }
+    fn overdue_seconds(&self, now: &DateTime<Local>) -> i64 {
+        if self.date_only {
+            NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").ok()
+                .map(|date| now.date_naive().signed_duration_since(date).num_days().max(0) * 86400)
+                .unwrap_or(0)
+        } else { now.timestamp().saturating_sub(self.target).max(0) }
+    }
+    fn sort_target(&self) -> i64 {
+        if self.kind == "end" && self.date_only {
+            NaiveDate::parse_from_str(&self.date, "%Y-%m-%d").ok()
+                .and_then(|date| date.succ_opt())
+                .and_then(|date| date.and_hms_opt(0, 0, 0))
+                .and_then(|date| Local.from_local_datetime(&date).earliest())
+                .map(|date| date.timestamp()).unwrap_or(self.target)
+        } else { self.target }
+    }
+}
 struct Candidate {
     item: Item,
     due: Vec<i64>,
@@ -126,9 +171,53 @@ struct Runtime {
     offered: BTreeMap<String, u32>,
     last_error: String,
     retry_after: i64,
+    notification_text: Option<(String, String)>,
 }
+impl Runtime {
+    fn items(&self) -> Vec<Item> {
+        self.items_at(&Local::now())
+    }
+
+    fn items_at(&self, now: &DateTime<Local>) -> Vec<Item> {
+        let mut items: Vec<_> = self.active.values().cloned().collect();
+        items.sort_by_key(|i| {
+            let overdue = i.is_overdue(now);
+            (if overdue { 0 } else if i.kind == "end" { 1 } else { 2 },
+             if overdue { -i.overdue_seconds(now) } else { i.sort_target() }, i.key.clone())
+        });
+        items
+    }
+
+    fn reconcile(&mut self, candidates: Vec<Candidate>, ledger: &Ledger, policy: &str, now: i64) -> Vec<Item> {
+        let valid: HashSet<_> = candidates.iter().map(|c| c.item.key.clone()).collect();
+        self.active.retain(|k, _| valid.contains(k));
+        self.offered.retain(|k, _| valid.contains(k));
+        let mut fresh = vec![];
+        for c in candidates {
+            let r = ledger.records.get(&c.item.key).cloned().unwrap_or_default();
+            if let Some(item) = pending(&c, &r, now, policy) {
+                if self.offered.get(&item.key).copied().unwrap_or(0) < item.batch {
+                    fresh.push(item.clone());
+                }
+                self.active.insert(item.key.clone(), item);
+            } else if !self.active.contains_key(&c.item.key)
+                || r.acknowledged || r.snooze.is_some()
+                || c.due.first().is_some_and(|t| *t > now) {
+                self.active.remove(&c.item.key);
+                self.offered.remove(&c.item.key);
+            } else if let Some(item) = self.active.get_mut(&c.item.key) {
+                // Displayed-policy reminders stay in the open summary until handled.
+                item.title = c.item.title;
+                item.path = c.item.path;
+            }
+        }
+        fresh
+    }
+}
+
 pub struct Service {
     runtime: Mutex<Runtime>,
+    layout: Mutex<()>,
     ready: AtomicBool,
 }
 
@@ -148,7 +237,8 @@ fn time(value: &str, precision: Option<bool>) -> Option<(DateTime<Local>, bool)>
 fn candidates(data: &Data, cfg: &Config) -> Vec<Candidate> {
     let mut output = vec![];
     for todo in &data.todos {
-        if todo.done || todo.archived_at.is_some() || todo.suspended_at.is_some() {
+        if todo.done || todo.archived_at.is_some() || todo.suspended_at.is_some()
+            || !cfg.group_is_enabled(todo.group_id.as_deref()) {
             continue;
         }
         let mut names = vec![];
@@ -278,10 +368,12 @@ pub struct Snapshot {
 pub fn reminder_snapshot(app: tauri::AppHandle) -> Result<Snapshot, String> {
     let _lock = lock_store(&app)?;
     let settings = load_settings(&app_dir(&app)?.join("settings.json"))?;
+    let data = load_data(&app_dir(&app)?.join("todos.json"))?;
+    let valid: HashSet<_> = candidates(&data, &settings.reminders).into_iter().map(|c| c.item.key).collect();
     let service = app.state::<Service>();
     let rt = service.runtime.lock().map_err(|e| e.to_string())?;
-    let mut items: Vec<_> = rt.active.values().cloned().collect();
-    items.sort_by_key(|i| (i.kind != "end", i.target));
+    let items = rt.items().into_iter()
+        .filter(|i| settings.reminders.enabled && valid.contains(&i.key)).collect();
     Ok(Snapshot {
         items,
         config: settings.reminders,
@@ -358,11 +450,13 @@ pub fn reminder_action(
     let _lock = lock_store(&app)?;
     let dir = app_dir(&app)?;
     let cfg = load_settings(&dir.join("settings.json"))?.reminders;
+    let data = load_data(&dir.join("todos.json"))?;
+    let valid: HashSet<_> = candidates(&data, &cfg).into_iter().map(|c| c.item.key).collect();
     let mut l = ledger(&dir)?;
     let service = app.state::<Service>();
     let mut rt = service.runtime.lock().map_err(|e| e.to_string())?;
     for key in &keys {
-        if !rt.active.contains_key(key) {
+        if !cfg.enabled || !valid.contains(key) || !rt.active.contains_key(key) {
             continue;
         }
         let record = l.records.entry(key.clone()).or_default();
@@ -378,16 +472,20 @@ pub fn reminder_action(
         rt.active.remove(&key);
         rt.offered.remove(&key);
     }
-    let empty = rt.active.is_empty();
+    let remaining = rt.items();
+    let empty = remaining.is_empty();
     drop(rt);
     drop(_lock);
-    reminder_native::clear(&app);
+    let notification_error = reminder_native::sync(&app, &remaining, &cfg).err();
     if empty {
         if let Some(w) = app.get_webview_window("reminder") {
             w.hide().map_err(|e| e.to_string())?;
         }
     }
     let _ = app.emit("reminders-changed", ());
+    if let Some(error) = notification_error {
+        notification_failed(&app, vec![], false, error);
+    }
     Ok(())
 }
 
@@ -399,6 +497,52 @@ pub fn reminder_sound_preview(app: tauri::AppHandle) -> Result<(), String> {
     };
     reminder_native::sound(&cfg)
 }
+fn fit_window(window: &tauri::WebviewWindow, requested: Option<f64>) -> Result<(), String> {
+    let service = window.state::<Service>();
+    let _layout = service.layout.lock().map_err(|e| e.to_string())?;
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?
+        .or(window.primary_monitor().map_err(|e| e.to_string())?).ok_or("无法获取显示器尺寸")?;
+    let area = monitor.work_area();
+    let scale = window.scale_factor().map_err(|e| e.to_string())?;
+    let outer = window.outer_size().map_err(|e| e.to_string())?;
+    let inner = window.inner_size().map_err(|e| e.to_string())?;
+    let frame_height = outer.height.saturating_sub(inner.height) as f64;
+    let frame_width = outer.width.saturating_sub(inner.width) as f64;
+    let available_height = ((area.size.height as f64 - frame_height) / scale - 16.).max(120.);
+    let available_width = ((area.size.width as f64 - frame_width) / scale - 16.).max(320.);
+    let height = requested.unwrap_or(inner.height as f64 / scale).clamp(160., 520.).min(available_height);
+    let width = 400_f64.min(available_width);
+    if (inner.height as f64 / scale - height).abs() > 1.
+        || (inner.width as f64 / scale - width).abs() > 1. {
+        window.set_size(tauri::LogicalSize::new(width, height)).map_err(|e| e.to_string())?;
+        eprintln!("[reminders] resize width={width:.0} height={height:.0}");
+    }
+    let size = window.outer_size().map_err(|e| e.to_string())?;
+    let position = window.outer_position().map_err(|e| e.to_string())?;
+    let margin = (8. * scale).round() as i32;
+    let x = clamp_window_axis(position.x, area.position.x, area.size.width, size.width, margin);
+    let y = clamp_window_axis(position.y, area.position.y, area.size.height, size.height, margin);
+    if x != position.x || y != position.y {
+        window.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn clamp_window_axis(position: i32, origin: i32, available: u32, extent: u32, margin: i32) -> i32 {
+    let min = origin.saturating_add(margin);
+    let max = (i64::from(origin) + i64::from(available) - i64::from(extent) - i64::from(margin))
+        .clamp(i64::from(min), i64::from(i32::MAX)) as i32;
+    position.clamp(min, max)
+}
+
+#[tauri::command]
+pub async fn reminder_resize(window: tauri::WebviewWindow, height: f64) -> Result<(), String> {
+    if window.label() != "reminder" || !height.is_finite() {
+        return Err("无效的提醒窗口尺寸请求".into());
+    }
+    fit_window(&window, Some(height))
+}
+
 pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
     let w = app
         .get_webview_window("reminder")
@@ -413,22 +557,8 @@ pub fn show(app: &tauri::AppHandle) -> Result<(), String> {
                 .map_err(|e| e.to_string())?;
         }
     }
-    // Re-check monitor bounds after a monitor is disconnected.
-    if let Ok(p) = w.outer_position() {
-        let visible = app
-            .available_monitors()
-            .map_err(|e| e.to_string())?
-            .iter()
-            .any(|m| {
-                p.x >= m.position().x - 60
-                    && p.y >= m.position().y
-                    && p.x < m.position().x + m.size().width as i32 - 60
-                    && p.y < m.position().y + m.size().height as i32 - 32
-            });
-        if !visible {
-            w.center().map_err(|e| e.to_string())?;
-        }
-    }
+    // Re-check the whole window against the work area, including taskbar and DPI.
+    fit_window(&w, None)?;
     // Keep tao's visibility flags in sync; raw ShowWindow makes later hide() a no-op.
     w.set_focusable(false).map_err(|e| e.to_string())?;
     let shown = w.show().map_err(|e| e.to_string());
@@ -451,6 +581,7 @@ fn tick(app: &tauri::AppHandle) -> Result<(), String> {
         rt.active.clear();
         rt.offered.clear();
         rt.retry_after = 0;
+        rt.notification_text = None;
         drop(rt);
         drop(_lock);
         if dirty {
@@ -461,39 +592,17 @@ fn tick(app: &tauri::AppHandle) -> Result<(), String> {
         }
         return Ok(());
     }
-    if rt.retry_after > Utc::now().timestamp() {
-        return Ok(());
-    }
+    let retrying = rt.retry_after > Utc::now().timestamp();
     let data = load_data(&dir.join("todos.json"))?;
     let mut l = ledger(&dir)?;
-    let candidates = candidates(&data, &cfg);
-    let valid: HashSet<_> = candidates.iter().map(|c| c.item.key.clone()).collect();
     let old = serde_json::to_string(&rt.active).unwrap();
-    let previous_keys: Vec<_> = rt.active.keys().cloned().collect();
-    rt.active.retain(|k, _| valid.contains(k));
-    rt.offered.retain(|k, _| valid.contains(k));
-    let mut fresh = vec![];
-    for c in candidates {
-        let r = l.records.get(&c.item.key).cloned().unwrap_or_default();
-        if let Some(item) = pending(&c, &r, Utc::now().timestamp(), &cfg.policy) {
-            if rt.offered.get(&item.key).copied().unwrap_or(0) < item.batch {
-                fresh.push(item.clone());
-            }
-            rt.active.insert(item.key.clone(), item);
-        } else if !rt.active.contains_key(&c.item.key)
-            || r.acknowledged
-            || r.snooze.is_some()
-            || c.due.first().is_some_and(|t| *t > Utc::now().timestamp())
-        {
-            rt.active.remove(&c.item.key);
-        } else if let Some(item) = rt.active.get_mut(&c.item.key) {
-            item.title = c.item.title;
-            item.path = c.item.path;
-        }
-    }
+    let fresh = rt.reconcile(candidates(&data, &cfg), &l, &cfg.policy, Utc::now().timestamp());
+    let summary = rt.items();
+    let text = reminder_native::notification_text(&summary, &Local::now());
+    let status_changed = rt.notification_text.as_ref() != Some(&text);
+    rt.notification_text = Some(text);
     let changed = old != serde_json::to_string(&rt.active).unwrap();
     let empty = rt.active.is_empty();
-    let withdrawn = previous_keys.iter().any(|k| !rt.active.contains_key(k));
     drop(rt);
     drop(_lock);
     if let Some(w) = app.get_webview_window("reminder") {
@@ -504,11 +613,11 @@ fn tick(app: &tauri::AppHandle) -> Result<(), String> {
     }
     if changed {
         let _ = app.emit("reminders-changed", ());
-        if empty || withdrawn {
-            reminder_native::clear(app);
-        }
     }
-    if fresh.is_empty() {
+    if (changed || status_changed) && (fresh.is_empty() || retrying) {
+        reminder_native::sync(app, &summary, &cfg)?;
+    }
+    if fresh.is_empty() || retrying {
         return Ok(());
     }
     let mut delivered = false;
@@ -521,7 +630,7 @@ fn tick(app: &tauri::AppHandle) -> Result<(), String> {
         }
     }
     if cfg.system {
-        match reminder_native::notify(app, &fresh, &cfg) {
+        match reminder_native::notify(app, &summary, &fresh, &cfg, false) {
             Ok(()) => {
                 delivered = true;
                 system_delivered = true;
@@ -574,6 +683,7 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
     reminder_native::clear(app);
     app.manage(Service {
         runtime: Mutex::new(Runtime::default()),
+        layout: Mutex::new(()),
         ready: AtomicBool::new(false),
     });
     let window = tauri::WebviewWindowBuilder::new(
@@ -582,8 +692,8 @@ pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("reminder.html".into()),
     )
     .title("待办提醒")
-    .inner_size(400., 520.)
-    .min_inner_size(320., 260.)
+    .inner_size(400., 220.)
+    .min_inner_size(320., 120.)
     .visible(false)
     .focused(false)
     .center()
@@ -651,6 +761,160 @@ mod tests {
     fn data() -> Data {
         serde_json::from_value(serde_json::json!({"version":"2","updatedAt":"","todos":[{"id":"t","title":"test","startTime":"2026-11-09T00:00:00+08:00","endTime":"2026-11-10T15:00:00+08:00","startHasTime":false,"endHasTime":true}]})).unwrap()
     }
+    fn timed_data() -> (Data, Config, i64) {
+        let now = 1_800_000_000;
+        let mut d = data();
+        d.todos[0].start_time = Some(Utc.timestamp_opt(now, 0).unwrap().to_rfc3339());
+        d.todos[0].start_has_time = Some(true);
+        let mut second = d.todos[0].clone(); second.id = "second".into();
+        second.start_time = Some(Utc.timestamp_opt(now + 60, 0).unwrap().to_rfc3339());
+        d.todos.push(second);
+        let mut cfg = Config::default(); cfg.scope = "start".into(); cfg.start_minutes = 0;
+        (d, cfg, now)
+    }
+    fn delivered(rt: &mut Runtime, ledger: &mut Ledger, fresh: &[Item]) {
+        for item in fresh {
+            rt.offered.insert(item.key.clone(), item.batch);
+            ledger.records.entry(item.key.clone()).or_default().delivered = item.batch;
+        }
+    }
+    fn ordering_fixture() -> (Runtime, DateTime<Local>) {
+        let now = Local.with_ymd_and_hms(2026, 11, 11, 12, 0, 0).single().unwrap();
+        let mut rt = Runtime::default();
+        for (key, kind, date_only, date, target) in [
+            ("today", "end", true, "2026-11-11", now.timestamp() - 43200),
+            ("yesterday", "end", true, "2026-11-10", now.timestamp() - 129600),
+            ("minute", "end", false, "2026-11-11", now.timestamp() - 60),
+            ("second", "end", false, "2026-11-11", now.timestamp() - 1),
+            ("future", "end", false, "2026-11-11", now.timestamp() + 60),
+            ("start", "start", false, "2026-11-10", now.timestamp() - 86400),
+        ] {
+            let item: Item = serde_json::from_value(serde_json::json!({"key":key,"todoId":key,"title":key,"path":"Work","kind":kind,"target":target,"dateOnly":date_only,"date":date,"batch":1,"count":1,"due":0})).unwrap();
+            rt.active.insert(key.into(), item);
+        }
+        (rt, now)
+    }
+    #[test]
+    fn overdue_even_one_second_precedes_today_and_start_reminders() {
+        let (rt, now) = ordering_fixture();
+        let keys: Vec<_> = rt.items_at(&now).into_iter().map(|i| i.key).collect();
+        assert_eq!(keys, ["yesterday", "minute", "second", "future", "today", "start"]);
+        assert!(!rt.active["today"].is_overdue(&now));
+        assert!(rt.active["second"].is_overdue(&now));
+        assert!(!rt.active["start"].is_overdue(&now));
+    }
+    #[test]
+    fn deadline_order_uses_day_end_and_updates_status_with_stable_ties() {
+        let (mut rt, now) = ordering_fixture();
+        let minute_later = now + chrono::Duration::minutes(1);
+        assert!(rt.active["future"].is_overdue(&minute_later));
+        let midnight = Local.with_ymd_and_hms(2026, 11, 12, 0, 0, 0).single().unwrap();
+        assert!(rt.active["today"].is_overdue(&midnight));
+        assert_eq!(rt.active["today"].sort_target(), midnight.timestamp());
+        let mut tie = rt.active["minute"].clone(); tie.key = "minute-z".into();
+        rt.active.insert(tie.key.clone(), tie);
+        let keys: Vec<_> = rt.items_at(&midnight).into_iter().map(|i| i.key).collect();
+        assert_eq!(keys, ["yesterday", "today", "minute", "minute-z", "second", "future", "start"]);
+    }
+    #[test]
+    fn mixed_precision_sorts_displayed_day_above_17_hours_but_below_25_hours() {
+        let (mut rt, now) = ordering_fixture();
+        rt.active.retain(|key, _| key == "yesterday");
+        let mut timed = rt.active["yesterday"].clone();
+        timed.date_only = false; timed.key = "timed".into();
+        timed.target = now.timestamp() - 17 * 3600;
+        rt.active.insert(timed.key.clone(), timed.clone());
+        assert_eq!(rt.items_at(&now)[0].key, "yesterday");
+        timed.target = now.timestamp() - 25 * 3600;
+        rt.active.insert(timed.key.clone(), timed.clone());
+        assert_eq!(rt.items_at(&now)[0].key, "timed");
+        timed.target = now.timestamp() - 86399;
+        rt.active.insert(timed.key.clone(), timed);
+        assert_eq!(rt.items_at(&now)[0].key, "yesterday");
+        assert_eq!(rt.items_at(&(now + chrono::Duration::seconds(2)))[0].key, "timed");
+    }
+    #[test]
+    fn becoming_overdue_does_not_offer_an_already_open_reminder_again() {
+        let (mut d, mut cfg, now) = timed_data();
+        d.todos.truncate(1); cfg.scope = "end".into(); cfg.end_minutes = 1;
+        d.todos[0].end_time = Some(Utc.timestamp_opt(now + 60, 0).unwrap().to_rfc3339());
+        d.todos[0].end_has_time = Some(true);
+        let mut rt = Runtime::default(); let mut l = Ledger::default();
+        let fresh = rt.reconcile(candidates(&d, &cfg), &l, "ack", now);
+        assert_eq!(fresh.len(), 1); delivered(&mut rt, &mut l, &fresh);
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 60).is_empty());
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 120).is_empty());
+        let later = Utc.timestamp_opt(now + 120, 0).unwrap().with_timezone(&Local);
+        assert!(rt.items_at(&later)[0].is_overdue(&later));
+    }
+    #[test]
+    fn staggered_reminders_share_one_summary_without_reoffering_old_items() {
+        let (d, cfg, now) = timed_data();
+        let mut rt = Runtime::default(); let mut l = Ledger::default();
+        let a = rt.reconcile(candidates(&d, &cfg), &l, "ack", now);
+        assert_eq!((a.len(), rt.items().len()), (1, 1)); delivered(&mut rt, &mut l, &a);
+        let b = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 60);
+        assert_eq!((b.len(), rt.items().len()), (1, 2));
+        assert_eq!(b[0].todo_id, "second"); delivered(&mut rt, &mut l, &b);
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 61).is_empty());
+        assert_eq!(rt.items().len(), 2);
+    }
+    #[test]
+    fn editing_two_times_replaces_old_plans_then_regroups_new_due_items() {
+        let (mut d, cfg, now) = timed_data();
+        let mut rt = Runtime::default(); let mut l = Ledger::default();
+        let old = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 60);
+        assert_eq!(old.len(), 2); delivered(&mut rt, &mut l, &old);
+        for (i, t) in d.todos.iter_mut().enumerate() {
+            t.start_time = Some(Utc.timestamp_opt(now + 120 + i as i64 * 60, 0).unwrap().to_rfc3339());
+        }
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 61).is_empty());
+        assert!(rt.items().is_empty());
+        let first = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 120);
+        assert_eq!((first.len(), rt.items().len()), (1, 1)); delivered(&mut rt, &mut l, &first);
+        let second = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 180);
+        assert_eq!((second.len(), rt.items().len()), (1, 2));
+        assert!(rt.items().iter().all(|i| old.iter().all(|o| o.key != i.key)));
+    }
+    #[test]
+    fn acknowledged_and_snoozed_items_leave_summary_without_losing_other_items() {
+        let (d, cfg, now) = timed_data();
+        let mut rt = Runtime::default(); let mut l = Ledger::default();
+        let all = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 60);
+        delivered(&mut rt, &mut l, &all);
+        let first = all.iter().find(|i| i.todo_id == "t").unwrap();
+        l.records.get_mut(&first.key).unwrap().snooze = Some(now + 120);
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 61).is_empty());
+        assert_eq!(rt.items().len(), 1);
+        let returned = rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 120);
+        assert_eq!((returned.len(), rt.items().len()), (1, 2));
+        l.records.get_mut(&first.key).unwrap().acknowledged = true;
+        assert!(rt.reconcile(candidates(&d, &cfg), &l, "ack", now + 121).is_empty());
+        assert_eq!(rt.items().len(), 1);
+        assert_eq!(rt.items()[0].todo_id, "second");
+    }
+    #[test]
+    fn shown_policy_keeps_existing_open_items_when_later_reminder_arrives() {
+        let (d, cfg, now) = timed_data();
+        let mut rt = Runtime::default(); let mut l = Ledger::default();
+        let first = rt.reconcile(candidates(&d, &cfg), &l, "shown", now);
+        delivered(&mut rt, &mut l, &first);
+        let second = rt.reconcile(candidates(&d, &cfg), &l, "shown", now + 60);
+        assert_eq!((second.len(), rt.items().len()), (1, 2));
+        let mut restarted = Runtime::default();
+        assert_eq!(restarted.reconcile(candidates(&d, &cfg), &l, "shown", now + 60).len(), 1);
+        assert_eq!(restarted.items()[0].todo_id, "second");
+    }
+
+    #[test]
+    fn adaptive_window_position_stays_in_work_area() {
+        assert_eq!(clamp_window_axis(1700, 0, 1920, 416, 8), 1496);
+        assert_eq!(clamp_window_axis(900, 0, 1040, 550, 8), 482);
+        assert_eq!(clamp_window_axis(-1900, -1920, 1920, 416, 8), -1900);
+        assert_eq!(clamp_window_axis(-50, -1920, 1920, 416, 8), -424);
+        assert_eq!(clamp_window_axis(0, 0, 100, 416, 8), 8);
+    }
+
     #[test]
     fn defaults_match_approved_reminder_preferences() {
         let c = Config::default();
@@ -669,6 +933,64 @@ mod tests {
         assert_eq!(c.count, 1);
         c.validate().unwrap();
     }
+    #[test]
+    fn legacy_config_keeps_all_groups_and_future_default_does_not_toggle_existing_groups() {
+        let mut c: Config = serde_json::from_str(r#"{"enabled":true}"#).unwrap();
+        let mut d = data();
+        d.groups = vec![super::super::Group { id:"work".into(), name:"Work".into(), order:0, color:None }];
+        assert!(c.group_is_enabled(None));
+        assert!(c.group_is_enabled(Some("work")));
+        c.preserve_existing_groups(&d);
+        c.new_group_enabled = false;
+        assert!(c.group_is_enabled(Some("work")));
+        assert!(!c.group_is_enabled(Some("new")));
+        d.groups.push(super::super::Group { id:"new".into(), name:"New".into(), order:1, color:None });
+        c.preserve_existing_groups(&d);
+        c.new_group_enabled = true;
+        assert!(!c.group_is_enabled(Some("new")));
+        assert!(c.group_is_enabled(Some("later")));
+        let restored: Config = serde_json::from_value(serde_json::to_value(c).unwrap()).unwrap();
+        assert!(!restored.group_is_enabled(Some("new")));
+        assert!(restored.group_is_enabled(Some("work")));
+    }
+
+    #[test]
+    fn group_filter_covers_both_times_moving_and_default_group() {
+        let mut d = data();
+        let mut c = Config::default();
+        c.group_enabled.insert("muted".into(), false);
+        assert_eq!(candidates(&d, &c).len(), 2);
+        d.todos[0].group_id = Some("muted".into());
+        assert!(candidates(&d, &c).is_empty());
+        d.todos[0].group_id = Some("active".into());
+        assert_eq!(candidates(&d, &c).len(), 2);
+        c.default_group_enabled = false;
+        d.todos[0].group_id = None;
+        assert!(candidates(&d, &c).is_empty());
+        c.default_group_enabled = true;
+        assert_eq!(candidates(&d, &c).len(), 2);
+    }
+
+    #[test]
+    fn disabling_and_reenabling_preserves_ack_snooze_and_displayed_policy() {
+        let d = data();
+        let mut c = Config::default();
+        let before = candidates(&d, &c).remove(0);
+        let now = before.due[0] + 100;
+        let ack = Record { acknowledged:true, ..Default::default() };
+        let snooze = Record { snooze:Some(now + 600), ..Default::default() };
+        let displayed = Record { delivered:1, ..Default::default() };
+        c.default_group_enabled = false;
+        assert!(candidates(&d, &c).is_empty());
+        c.default_group_enabled = true;
+        let after = candidates(&d, &c).remove(0);
+        assert_eq!(before.item.key, after.item.key);
+        assert!(pending(&after, &ack, now, "ack").is_none());
+        assert!(pending(&after, &snooze, now, "ack").is_none());
+        assert!(pending(&after, &displayed, now, "shown").is_none());
+        assert!(pending(&after, &Record::default(), now, "ack").is_some());
+    }
+
     #[test]
     fn invalid_configs_reject_cross_midnight_and_no_channel() {
         let mut c = Config::default();
