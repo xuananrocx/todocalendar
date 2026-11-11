@@ -6,6 +6,7 @@ const vm = require('node:vm');
 
 function load(name, context, exposed) {
   context.AppDialog ??= { alert: (message, options) => context.alert?.(message, options) };
+  context.UpdateChecker ??= { settingsChanged() {} };
   let source = fs.readFileSync(path.join(__dirname, '..', 'frontend', 'js', name), 'utf8');
   source = source.replace(/Main\.init\(\);\s*$/, '');
   vm.createContext(context);

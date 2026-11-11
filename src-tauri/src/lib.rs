@@ -175,6 +175,7 @@ pub struct Settings {
     pub show_rest_badge: bool, // 周末/法定假日显示"休"角标
     pub holiday_auto_update: bool,
     pub holiday_last_update: Option<String>,
+    pub app_auto_update: bool,
     pub priority_highlight: String, // none | icon | bar | bg | full
     pub priority_auto_top: bool,    // 自动排序模式下优先待办置顶
     pub suspended_grey: bool,       // 搁置待办标题置灰(完成同款灰,无删除线)
@@ -256,6 +257,7 @@ impl Default for Settings {
             show_rest_badge: true,
             holiday_auto_update: true,
             holiday_last_update: None,
+            app_auto_update: true,
             priority_highlight: "bg".into(),
             priority_auto_top: true,
             suspended_grey: true,
@@ -2839,13 +2841,16 @@ mod tests {
 
         let mut settings = load_settings(&file).unwrap();
         assert!(settings.auto_archive);
+        assert!(settings.app_auto_update);
         assert_eq!(settings.archive_after_days, 7);
         settings.auto_archive = false;
+        settings.app_auto_update = false;
         settings.archive_after_days = 14;
         save_settings(&file, &settings).unwrap();
 
         let reloaded = load_settings(&file).unwrap();
         assert!(!reloaded.auto_archive);
+        assert!(!reloaded.app_auto_update);
         assert_eq!(reloaded.archive_after_days, 14);
         let _ = fs::remove_file(file);
     }

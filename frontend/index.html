@@ -9,6 +9,7 @@
 <script src="vendor/vditor/vditor.min.js"></script>
 <link rel="stylesheet" href="css/reminder.css">
 <link rel="stylesheet" href="css/ui.css">
+<link rel="stylesheet" href="css/updates.css">
 </head>
 <body>
 <div class="app">
@@ -561,6 +562,30 @@
   </div>
 </div>
 
+<!-- 多版本更新说明 -->
+<div class="modal-mask update-mask" id="updateMask" hidden>
+  <section class="modal update-modal" role="dialog" aria-modal="true" aria-labelledby="updateTitle" aria-describedby="updateSummary">
+    <header class="update-head">
+      <div class="update-title-row">
+        <h3 id="updateTitle">发现新版本</h3>
+        <button type="button" class="icon-btn" id="btnCloseUpdate" aria-label="关闭更新弹窗"><i data-icon="x"></i></button>
+      </div>
+      <div class="update-summary" id="updateSummary"></div>
+    </header>
+    <div class="update-scroll" id="updateScroll" tabindex="0" role="region" aria-label="各版本更新内容">
+      <div class="update-warning" id="updateWarning" hidden>
+        <span id="updateWarningText" role="status"></span>
+        <button type="button" class="btn ghost" id="btnRetryUpdate">重新获取</button>
+      </div>
+      <div id="updateReleases"></div>
+    </div>
+    <footer class="update-actions">
+      <button type="button" class="btn ghost" id="btnLaterUpdate">暂不更新</button>
+      <button type="button" class="btn primary" id="btnDownloadUpdate">前往下载</button>
+    </footer>
+  </section>
+</div>
+
 <!-- 应用内确认弹窗 -->
 <div class="modal-mask confirm-mask" id="confirmMask" hidden>
   <div class="modal confirm-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
@@ -627,6 +652,7 @@
 <script src="js/memo.js"></script>
 <script src="js/reminder-settings.js"></script>
 <script src="js/rest-settings.js"></script>
+<script src="js/updates.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

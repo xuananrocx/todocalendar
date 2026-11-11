@@ -49,6 +49,7 @@ const Main = {
     this.refreshDropdownValues();
     await this.reload();
     this.bindEvents();
+    try { await UpdateChecker.init(this); } catch (e) { console.warn('初始化更新检查失败:', e); }
     await Memo.init();
     this.listenCrossWindowEvents();
     await this.checkArchiveDue();
@@ -114,6 +115,7 @@ const Main = {
     listen('settings-changed', async () => {
       try { this.state.settings = await API.getSettings(); } catch { return; }
       this.applySettingsToDom();
+      UpdateChecker.settingsChanged();
     });
   },
 
@@ -1392,6 +1394,7 @@ const Main = {
     Render.renderAll(this.state);
     try {
       this.state.settings = await API.updateSettings(patch);
+      UpdateChecker.settingsChanged();
       this.applySettingsToDom();
       this.refreshDropdownValues();
       Render.renderAll(this.state);
@@ -1453,6 +1456,8 @@ const Main = {
   },
 
   async openHelp() {
+    this.toggleDropdown(false);
+    this.toggleSortDropdown(false);
     document.getElementById('helpMask').hidden = false;
     document.getElementById('helpLogo').innerHTML = Icon.check();
     try {
@@ -1524,54 +1529,8 @@ const Main = {
     this._mpYear += delta;
     this._renderMonthPicker();
   },
-  async checkUpdate() {
-    const box = document.getElementById('helpUpdateBox');
-    const text = document.getElementById('helpUpdateText');
-    box.className = 'help-update checking';
-    text.textContent = '正在检查...';
-    try {
-      const current = (await API.appVersion()).trim();
-      const res = await fetch('https://api.github.com/repos/xuananrocx/todocalendar/releases/latest', {
-        cache: 'no-store',
-        headers: { 'Accept': 'application/vnd.github+json' }
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const latestTag = (data.tag_name || '').replace(/^v/, '').trim();
-      const releaseUrl = data.html_url || 'https://github.com/xuananrocx/todocalendar/releases';
-      if (!latestTag) throw new Error('未找到最新版本');
-      const isNewer = this._compareVersion(latestTag, current) > 0;
-      if (isNewer) {
-        box.className = 'help-update warn';
-        text.textContent = `发现新版本 v${latestTag}`;
-        const confirmed = await this.confirmAction({
-          title: '发现新版本',
-          message: `检测到最新版本 v${latestTag}(当前 v${current}),是否前往下载?`,
-          confirmText: '前往下载',
-        });
-        if (confirmed) {
-          this.closeHelp();
-          API.openExternal(releaseUrl).catch(err => Main.notify('打开失败: ' + err));
-        }
-      } else {
-        box.className = 'help-update ok';
-        text.textContent = `✓ 已是最新版本 (v${current})`;
-      }
-    } catch (e) {
-      box.className = 'help-update warn';
-      text.textContent = `检查失败: ${e.message || '网络错误'}`;
-    }
-  },
-  _compareVersion(a, b) {
-    const pa = String(a).split('.');
-    const pb = String(b).split('.');
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-      const na = parseInt(pa[i] || '0', 10);
-      const nb = parseInt(pb[i] || '0', 10);
-      if (na !== nb) return na - nb;
-    }
-    return 0;
+  checkUpdate() {
+    return UpdateChecker.check('help');
   },
 
   toggleSortDropdown(force) {
@@ -2028,6 +1987,13 @@ const Main = {
         <div class="settings-section-title">通用交互</div>
         <div class="settings-row">${this._toggle(s.deleteConfirm !== false, 'deleteConfirm', '删除前确认', '默认已开启,关闭后直接删除')}</div>
         <div class="settings-row">${this._toggle(s.closeOnOutsideClick !== false, 'closeOnOutsideClick', '点击外部关闭弹窗', '点击遮罩空白处关闭弹窗;仅在按下和松开都在外部时触发(防止从内部拖到外部误触)')}</div>
+        </div>
+        <div class="settings-group">
+        <div class="settings-section-title">软件更新</div>
+        <div class="settings-row"><div class="switch-row">
+          <div class="meta"><div class="title">自动检查更新${this._hint('每 7 天自动检查一次，发现新版本时显示更新说明。正在编辑或休息时延后展示；托盘运行时等待主窗口打开。关闭后，进入帮助仍会自动检查更新。')}</div></div>
+          <button type="button" class="toggle update-auto-toggle ${s.appAutoUpdate !== false ? 'on' : ''}" data-onchange="appAutoUpdate" role="switch" aria-checked="${s.appAutoUpdate !== false}" aria-label="自动检查更新"></button>
+        </div></div>
         </div>
         <div class="settings-group">
         <div class="settings-section-title">应用图标</div>
