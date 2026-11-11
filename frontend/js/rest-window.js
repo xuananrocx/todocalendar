@@ -28,7 +28,7 @@
     const rest=s.phase==='rest',notice=['prompt','warning'].includes(s.phase);
     document.body.classList.toggle('notice',!rest);
     $('restScreen').hidden=!rest;$('footer').hidden=!rest;$('noticeScreen').hidden=!notice;
-    $('mode').textContent=s.config.mode==='forced'?'强制休息':'休息时间';
+    $('mode').textContent=s.preview?'休息效果体验':s.config.mode==='forced'?'强制休息':'休息时间';
     const phrase=phrases[s.quote]||phrases[0];$('quote').textContent=phrase[0];$('subtitle').textContent=phrase[1];
     $('clock').textContent=String(Math.floor(s.remaining/60)).padStart(2,'0')+':'+String(s.remaining%60).padStart(2,'0');
     $('progress').style.width=Math.min(100,s.remaining/(s.config.durationMinutes*60)*100)+'%';
@@ -36,6 +36,7 @@
     $('noticeText').textContent=s.phase==='warning'?'先把手头的事情收个尾，即将进入全屏休息。':phrase[1];
     $('start').textContent=`开始休息 · ${s.config.durationMinutes} 分钟`;
     $('actions').hidden=!notice;$('start').hidden=s.phase!=='prompt';$('skip').hidden=s.phase!=='prompt';
+    $('skip').textContent=s.preview?'结束体验 →':'跳过本次 →';$('later').hidden=!!s.preview;
     $('dismissWarning').hidden=s.phase!=='warning';$('skipWarning').hidden=s.phase!=='warning';
     $('error').hidden=!s.error;$('error').textContent=s.error;
   }

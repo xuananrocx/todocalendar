@@ -31,3 +31,9 @@ test('continuous hold exits once and window blur cancels it',async()=>{
 test('new session invalidates a pending hold and renders normal actions',async()=>{
   const s=setup();await flush();s.node('exit').onpointerdown({button:0,pointerId:1});s.ack();await flush();s.setState({phase:'prompt',generation:2});await s.events['rest-changed']();s.advance(4000);assert.ok(!s.calls.some(c=>c.args?.action==='exit'));assert.equal(s.node('actions').hidden,false);assert.equal(s.node('restScreen').hidden,true);
 });
+
+test('normal preview is marked as an independent test and does not offer snoozing',async()=>{
+  const s=setup();await flush();s.setState({phase:'prompt',preview:true});await s.events['rest-changed']();
+  assert.equal(s.node('mode').textContent,'休息效果体验');assert.equal(s.node('skip').textContent,'结束体验 →');assert.equal(s.node('later').hidden,true);
+  s.setState({preview:false});await s.events['rest-changed']();assert.equal(s.node('later').hidden,false);assert.equal(s.node('skip').textContent,'跳过本次 →');
+});

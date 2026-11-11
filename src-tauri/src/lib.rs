@@ -2209,6 +2209,7 @@ pub fn run() {
             rest::rest_snapshot,
             rest::rest_action,
             rest::rest_ready,
+            rest::rest_sound_preview,
             reminders::reminder_resize,
             reminders::reminder_action,
             reminders::reminder_ready,
