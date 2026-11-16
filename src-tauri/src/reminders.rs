@@ -18,6 +18,7 @@ pub struct Config {
     pub count: u32,
     pub interval_minutes: u32,
     pub start_minutes: u32,
+    pub new_todo_start_reminder: bool,
     pub end_minutes: u32,
     pub popup: bool,
     pub system: bool,
@@ -40,6 +41,7 @@ impl Default for Config {
             count: 1,
             interval_minutes: 180,
             start_minutes: 10,
+            new_todo_start_reminder: false,
             end_minutes: 30,
             popup: true,
             system: true,
@@ -104,6 +106,7 @@ impl Config {
 struct Record {
     acknowledged: bool,
     delivered: u32,
+    skipped: u32,
     snooze: Option<i64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -328,12 +331,42 @@ fn candidates(data: &Data, cfg: &Config) -> Vec<Candidate> {
     }
     output
 }
+// Called under the store lock before saving the new todo. An orphan record after
+// a failed todo save is harmless; saving the todo first could allow a reminder
+// to escape if persisting this record fails.
+pub fn prepare_new_todo(dir: &std::path::Path, todo: &super::Todo, cfg: &Config) -> Result<(), String> {
+    if cfg.new_todo_start_reminder { return Ok(()); }
+    let mut l = ledger(dir)?;
+    if skip_new_start(&mut l, todo, cfg, Local::now().timestamp()) {
+        storage::write_json(&dir.join("reminder-state.json"), &l)?;
+    }
+    Ok(())
+}
+fn skip_new_start(l: &mut Ledger, todo: &super::Todo, cfg: &Config, now: i64) -> bool {
+    if cfg.new_todo_start_reminder { return false; }
+    let mut config = cfg.clone();
+    config.scope = "start".into();
+    config.default_group_enabled = true;
+    config.new_group_enabled = true;
+    config.group_enabled.clear();
+    let mut data = Data { version: "2".into(), updated_at: String::new(), todos: vec![], groups: vec![] };
+    data.todos.push(todo.clone());
+    let mut changed = false;
+    for c in candidates(&data, &config) {
+        let skipped = c.due.iter().filter(|t| **t <= now).count() as u32;
+        if skipped > 0 {
+            l.records.entry(c.item.key).or_default().skipped = skipped;
+            changed = true;
+        }
+    }
+    changed
+}
 fn pending(c: &Candidate, r: &Record, now: i64, policy: &str) -> Option<Item> {
     if r.acknowledged {
         return None;
     }
     let batch = c.due.iter().filter(|t| **t <= now).count() as u32;
-    if batch == 0 {
+    if batch == 0 || batch <= r.skipped {
         return None;
     }
     if let Some(until) = r.snooze {
@@ -790,6 +823,44 @@ mod tests {
             ledger.records.entry(item.key.clone()).or_default().delivered = item.batch;
         }
     }
+    #[test]
+    fn new_start_skips_due_only_and_survives_restart_for_both_policies() {
+        let (mut d, mut cfg, now) = timed_data();
+        assert!(!cfg.new_todo_start_reminder);
+        cfg.scope = "both".into(); cfg.end_minutes = 0;
+        d.todos[0].end_time = d.todos[0].start_time.clone();
+        let mut l = Ledger::default();
+        assert!(skip_new_start(&mut l, &d.todos[0], &cfg, now));
+        assert!(!skip_new_start(&mut l, &d.todos[1], &cfg, now));
+        let l: Ledger = serde_json::from_str(&serde_json::to_string(&l).unwrap()).unwrap();
+        for policy in ["ack", "shown"] {
+            let fresh = Runtime::default().reconcile(candidates(&d, &cfg), &l, policy, now);
+            assert!(fresh.iter().all(|i| i.kind != "start"));
+            assert!(fresh.iter().any(|i| i.kind == "end"));
+            let later = Runtime::default().reconcile(candidates(&d, &cfg), &l, policy, now + 60);
+            assert!(later.iter().any(|i| i.todo_id == "second" && i.kind == "start"));
+        }
+        d.todos[0].start_time = Some(Utc.timestamp_opt(now + 120, 0).unwrap().to_rfc3339());
+        assert!(Runtime::default().reconcile(candidates(&d, &cfg), &l, "ack", now + 120)
+            .iter().any(|i| i.todo_id == "t" && i.kind == "start"));
+        cfg.new_todo_start_reminder = true;
+        assert!(!skip_new_start(&mut Ledger::default(), &d.todos[0], &cfg, now + 120));
+    }
+    #[test]
+    fn new_date_start_keeps_future_batches_even_when_group_and_scope_disabled() {
+        let mut d = data(); d.todos[0].start_time = Some("2026-11-09".into());
+        let mut cfg = Config::default(); cfg.count = 3; cfg.interval_minutes = 60;
+        cfg.scope = "end".into(); cfg.default_group_enabled = false;
+        let now = Local.with_ymd_and_hms(2026, 11, 9, 10, 0, 0).single().unwrap().timestamp();
+        let mut l = Ledger::default();
+        assert!(skip_new_start(&mut l, &d.todos[0], &cfg, now));
+        cfg.scope = "start".into(); cfg.default_group_enabled = true;
+        for policy in ["ack", "shown"] {
+            assert!(Runtime::default().reconcile(candidates(&d, &cfg), &l, policy, now).is_empty());
+            let items = Runtime::default().reconcile(candidates(&d, &cfg), &l, policy, now + 1800);
+            assert_eq!(items.len(), 1); assert_eq!(items[0].batch, 2);
+        }
+    }
     fn ordering_fixture() -> (Runtime, DateTime<Local>) {
         let now = Local.with_ymd_and_hms(2026, 11, 11, 12, 0, 0).single().unwrap();
         let mut rt = Runtime::default();
@@ -1114,12 +1185,14 @@ mod tests {
             Record {
                 acknowledged: false,
                 delivered: 2,
+                skipped: 1,
                 snooze: Some(123),
             },
         );
         storage::write_json(&dir.join("reminder-state.json"), &l).unwrap();
         let restored = ledger(&dir).unwrap();
         assert_eq!(restored.records["t"].snooze, Some(123));
+        assert_eq!(restored.records["t"].skipped, 1);
         l.version = 99;
         storage::write_json(&dir.join("reminder-state.json"), &l).unwrap();
         assert!(ledger(&dir).is_err());

@@ -1,7 +1,8 @@
 const RestSettings = {
   help: {
     '开启休息提醒':'定时提醒起身走走、喝水和放松，不关联待办。仅在软件运行时计时；休息期间暂缓待办提醒，结束后汇总，系统中已有通知不会被删除。',
-    '提醒间隔':'从进入提醒时段、开启功能或一次休息结束后重新计时，各时段独立计算。锁屏、休眠或重新打开软件后重新计算间隔，不补提醒；修改配置后也会重新计时。',
+    '提醒间隔':'从进入提醒时段、开启功能或一次休息结束后重新计时，各时段独立计算。锁屏、睡眠和休眠是否继续计时由下方开关控制；重新打开软件或修改配置后重新计算间隔。',
+    '锁屏、睡眠期间继续计时':'包含锁屏、睡眠和休眠，默认关闭。开启后按实际经过的时间计算，唤醒并解锁后未到点继续剩余时间，已到点只提醒一次；强制模式重新进行完整预告。仍遵守提醒时段，上一时段的提醒不会带入下一时段。已经开始的休息继续至结束。退出软件或关机后不补提醒。关闭时，锁屏或唤醒后重新计算完整间隔。',
     '仅在指定时段提醒':'开启后仅在所选日期和时段内计时。时段结束时收起未处理的普通提醒和强制预告，取消稍后提醒；已开始的休息继续到结束。下一时段重新计时，不累计午休前的剩余时间。关闭后全天计时。',
     '提醒日期':'工作日跟随软件的法定节假日和调休数据：法定假日不提醒，调休上班日提醒；未覆盖的日期按周一至周五判断。每天和自定义星期不受节假日影响。',
     '时段':'可设置 1–8 段，开始时间须早于结束时间，时段不能重叠。不支持单段跨午夜。时间支持滚动选择或输入。',
@@ -58,7 +59,7 @@ const RestSettings = {
       + '</div>';
   },
   html(value = {}, embedded = false) {
-    const r = { enabled:true, intervalMinutes:50, durationMinutes:5, warningSeconds:10, mode:'forced', allScreens:true, sound:'knock', volume:50, ...value };
+    const r = { enabled:true, countWhileLocked:false, intervalMinutes:50, durationMinutes:5, warningSeconds:10, mode:'forced', allScreens:true, sound:'knock', volume:50, ...value };
     const row = (name, field) => `<div class="settings-row reminder-setting-row"><div class="rest-setting-label">${name}${this.helpButton(name)}</div>${field}</div>`;
     const toggle = (key, title) => row(title, `<button type="button" class="app-switch ${r[key]?'on':''}" role="switch" aria-checked="${!!r[key]}" aria-label="${title}" data-rest-switch="${key}"><span></span></button>`);
     const number = (key, title, max, unit = '分钟', min = 1) => row(title, `<span class="reminder-setting-field"><input aria-label="${title}" data-rest="${key}" type="number" min="${min}" max="${max}" step="1" required value="${Number(r[key])}"><span>${unit}</span></span>`);
@@ -66,6 +67,7 @@ const RestSettings = {
     return (embedded ? '' : '<div class="settings-content-title">休息提醒</div>')
       + '<div class="settings-group"><div class="settings-section-title">休息节奏</div>'
       + toggle('enabled','开启休息提醒') + number('intervalMinutes','提醒间隔',240) + number('durationMinutes','休息时长',60)
+      + toggle('countWhileLocked','锁屏、睡眠期间继续计时')
       + '</div>'
       + '<div class="settings-group"><div class="settings-section-title">提醒方式</div>'
       + select('mode','提醒模式',[['normal','普通提醒'],['forced','强制休息']])

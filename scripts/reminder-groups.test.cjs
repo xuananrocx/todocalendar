@@ -28,3 +28,11 @@ test('settings panel does not inject group names as HTML', () => {
   assert.ok(!html.includes('<img'));
   assert.ok(html.includes('aria-haspopup="dialog"'));
 });
+
+test('new todo start switch defaults off and is only shown with start reminders', () => {
+  const html = ui.html({enabled:true,scope:'both'});
+  assert.match(html, /aria-checked="false" aria-label="新建补发开始提醒" data-reminder-switch="newTodoStartReminder"/);
+  assert.match(ui.html({enabled:true,scope:'start',newTodoStartReminder:true}), /aria-checked="true" aria-label="新建补发开始提醒"/);
+  assert.ok(!ui.html({enabled:true,scope:'end'}).includes('data-reminder-switch="newTodoStartReminder"'));
+  assert.ok(!ui.html({enabled:false,scope:'both'}).includes('data-reminder-switch="newTodoStartReminder"'));
+});

@@ -81,3 +81,5 @@
 .rest-help-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
 .app-help-popover { padding:10px 12px; color:var(--text); font-size:12px; line-height:1.65; overflow:auto; white-space:normal; }
 @media(max-width:480px) { .reminder-group-toggle { width:100%; } }
+
+.reminder-start-label { flex:1; white-space:nowrap; font-size:12px; font-weight:400; color:var(--muted); }

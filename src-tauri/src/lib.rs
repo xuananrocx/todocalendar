@@ -1035,6 +1035,7 @@ fn create_todo(
     data.todos.push(new.clone());
     let settings = load_settings(&settings_file(&app)?)?;
     sync_parent_time(&mut data, &settings, new_id);
+    reminders::prepare_new_todo(&app_dir(&app)?, &new, &settings.reminders)?;
     save_data_checked(&file, &data)?;
     Ok(new)
 }

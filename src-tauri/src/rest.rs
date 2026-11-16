@@ -3,17 +3,26 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     sync::Mutex,
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 use tauri::{Emitter, Manager};
 #[path = "rest_schedule.rs"]
 mod schedule;
 use schedule::{Schedule, Window};
+use std::sync::atomic::{AtomicU64, Ordering};
+static POWER_EPOCH: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, PartialEq)]
+enum DesktopState { Available, Locked, Unavailable }
+impl From<bool> for DesktopState {
+    fn from(value: bool) -> Self { if value { Self::Available } else { Self::Unavailable } }
+}
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Config {
     pub enabled: bool,
+    pub count_while_locked: bool,
     pub interval_minutes: u32,
     pub duration_minutes: u32,
     pub warning_seconds: u32,
@@ -27,6 +36,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             enabled: true,
+            count_while_locked: false,
             interval_minutes: 50,
             duration_minutes: 5,
             warning_seconds: 10,
@@ -72,6 +82,7 @@ struct Runtime {
     phase: Phase,
     deadline: Instant,
     last_tick: Instant,
+    last_wall: SystemTime,
     generation: u64,
     quote: usize,
     quote_pool: Vec<usize>,
@@ -82,6 +93,8 @@ struct Runtime {
     window: Option<Window>,
     preview: bool,
     background: Option<Box<Runtime>>,
+    desktop: DesktopState,
+    power_epoch: u64,
 }
 impl Runtime {
     fn new(now: Instant) -> Self {
@@ -90,6 +103,7 @@ impl Runtime {
             phase: Phase::Disabled,
             deadline: now,
             last_tick: now,
+            last_wall: SystemTime::now(),
             generation: 0,
             quote: 0,
             quote_pool: Vec::new(),
@@ -100,6 +114,8 @@ impl Runtime {
             window: None,
             preview: false,
             background: None,
+            desktop: DesktopState::Available,
+            power_epoch: POWER_EPOCH.load(Ordering::Relaxed),
         }
     }
     fn phase(&mut self, phase: Phase, now: Instant, seconds: u64) {
@@ -114,6 +130,7 @@ impl Runtime {
         Duration::from_secs((u64::from(self.config.duration_minutes) * 18 / 5).clamp(10, 30))
     }
     fn begin_preview(&mut self, now: Instant, config: Config, window: Option<Window>) -> Result<(), String> {
+        if self.desktop != DesktopState::Available { return Err("请解锁屏幕后体验休息效果".into()); }
         if self.background.is_some() { return Err("休息效果体验正在进行".into()); }
         if matches!(self.phase, Phase::Prompt | Phase::Warning | Phase::Rest) {
             return Err("请先处理当前休息提醒，再体验休息效果".into());
@@ -187,17 +204,35 @@ impl Runtime {
         };
         self.quote = self.quote_pool.swap_remove(index);
     }
-    fn advance(&mut self, now: Instant, available: bool, config: Config, window: Option<Window>) {
+    fn advance(&mut self, now: Instant, desktop: impl Into<DesktopState>, config: Config, window: Option<Window>) {
+        let desktop = desktop.into();
         if let Some(background) = self.background.as_mut() {
             // Keep the real deadline moving, but defer delivery until the test ends.
-            background.advance_timer(now, available, config.clone(), window, true);
+            background.advance_timer(now, desktop, config.clone(), window, true);
         }
-        self.advance_timer(now, available, config, window, false);
+        self.advance_timer(now, desktop, config, window, false);
         if self.background.is_some() && !self.preview { self.finish_preview(); }
     }
-    fn advance_timer(&mut self, now: Instant, available: bool, config: Config, window: Option<Window>, defer: bool) {
+    fn advance_timer(&mut self, now: Instant, desktop: DesktopState, config: Config, window: Option<Window>, defer: bool) {
+        self.advance_timer_at(now, SystemTime::now(), desktop, config, window, defer);
+    }
+    fn advance_timer_at(&mut self, now: Instant, wall: SystemTime, desktop: DesktopState, config: Config, window: Option<Window>, defer: bool) {
         let gap = now.saturating_duration_since(self.last_tick) > Duration::from_secs(10);
+        let epoch = POWER_EPOCH.load(Ordering::Relaxed);
+        let resumed = self.power_epoch != epoch;
+        self.power_epoch = epoch;
+        self.desktop = desktop;
+        if resumed && config.count_while_locked && !self.preview {
+            // Account for suspended time even on clocks that stop during sleep.
+            let elapsed = wall.duration_since(self.last_wall).unwrap_or_default()
+                .max(now.saturating_duration_since(self.last_tick));
+            let remaining = self.deadline.saturating_duration_since(self.last_tick);
+            self.deadline = if elapsed >= remaining {
+                now.checked_sub(elapsed - remaining).unwrap_or(now)
+            } else { now + (remaining - elapsed) };
+        }
         self.last_tick = now;
+        self.last_wall = wall;
         if self.config != config {
             self.config = config;
             self.window = window;
@@ -206,15 +241,36 @@ impl Runtime {
         }
         let changed_window = self.window != window;
         self.window = window;
-        if !available || gap {
+        if desktop == DesktopState::Unavailable || ((gap || resumed) && (!config.count_while_locked || self.preview))
+            || (desktop == DesktopState::Locked && (!config.count_while_locked || self.preview)) {
             self.reset(now);
             return;
+        }
+        if (resumed || gap) && !self.preview {
+            self.hold = None;
+            if matches!(self.phase, Phase::Warning | Phase::Prompt) {
+                self.phase(Phase::Waiting, now, 0);
+            } else if self.phase == Phase::Rest && now >= self.deadline {
+                // A completed break belongs to its old window, not the next one.
+                self.reset(if changed_window { now } else { self.deadline });
+            }
         }
         // A running rest may finish beyond the window. Pending prompts and
         // snoozes belong to their original window and never carry into the next.
         if !self.preview && self.phase != Phase::Rest
             && (changed_window || (window.is_none() && self.phase != Phase::Outside && self.config.enabled)) {
             self.reset(now);
+            return;
+        }
+        if desktop == DesktopState::Locked {
+            self.hold = None;
+            if matches!(self.phase, Phase::Warning | Phase::Prompt) {
+                // Keep a single due reminder. Unlock will offer a fresh full warning.
+                self.phase(Phase::Waiting, now, 0);
+            } else if self.phase == Phase::Rest && now >= self.deadline {
+                let finished_at = self.deadline;
+                self.reset(finished_at);
+            }
             return;
         }
         if now < self.deadline {
@@ -242,6 +298,7 @@ impl Runtime {
         generation: u64,
         now: Instant,
     ) -> Result<(), String> {
+        if self.desktop != DesktopState::Available { return Err("请返回桌面后操作休息提醒".into()); }
         if generation != self.generation {
             return Err("休息状态已更新，请重试".into());
         }
@@ -383,12 +440,23 @@ pub fn blocking(app: &tauri::AppHandle) -> bool {
         .is_some_and(|s| s.runtime.lock().is_ok_and(|r| r.phase == Phase::Rest))
 }
 #[cfg(windows)]
-fn desktop_available() -> bool {
+fn desktop_available() -> DesktopState {
     use windows_sys::Win32::System::StationsAndDesktops::*;
+    use windows_sys::Win32::System::RemoteDesktop::*;
     unsafe {
+        let mut buffer = std::ptr::null_mut();
+        let mut bytes = 0;
+        let ok = WTSQuerySessionInformationW(std::ptr::null_mut(), WTS_CURRENT_SESSION, WTSSessionInfoEx, &mut buffer, &mut bytes);
+        let locked = if ok != 0 && !buffer.is_null() && bytes as usize >= std::mem::size_of::<WTSINFOEXW>() {
+            let info = &*buffer.cast::<WTSINFOEXW>();
+            info.Level == 1 && info.Data.WTSInfoExLevel1.SessionState == WTSActive
+                && info.Data.WTSInfoExLevel1.SessionFlags == WTS_SESSIONSTATE_LOCK as i32
+        } else { false };
+        if !buffer.is_null() { WTSFreeMemory(buffer.cast()); }
+        if locked { return DesktopState::Locked; }
         let desk = OpenInputDesktop(0, 0, DESKTOP_READOBJECTS);
         if desk.is_null() {
-            return false;
+            return DesktopState::Unavailable;
         }
         let mut name = [0u16; 256];
         let mut needed = 0;
@@ -396,15 +464,34 @@ fn desktop_available() -> bool {
             GetUserObjectInformationW(desk, UOI_NAME, name.as_mut_ptr().cast(), 512, &mut needed)
                 != 0;
         CloseDesktop(desk);
-        ok && String::from_utf16_lossy(
+        let available = ok && String::from_utf16_lossy(
             &name[..name.iter().position(|v| *v == 0).unwrap_or(name.len())],
         )
-        .eq_ignore_ascii_case("Default")
+        .eq_ignore_ascii_case("Default");
+        available.into()
     }
 }
 #[cfg(not(windows))]
-fn desktop_available() -> bool {
-    true
+fn desktop_available() -> DesktopState {
+    DesktopState::Available
+}
+
+#[cfg(windows)]
+fn watch_power() -> Result<(), String> {
+    use windows_sys::Win32::{System::Power::*, UI::WindowsAndMessaging::*};
+    unsafe extern "system" fn changed(_: *const core::ffi::c_void, event: u32, _: *const core::ffi::c_void) -> u32 {
+        if matches!(event, PBT_APMSUSPEND | PBT_APMRESUMEAUTOMATIC | PBT_APMRESUMESUSPEND) {
+            POWER_EPOCH.fetch_add(1, Ordering::Relaxed);
+        }
+        0
+    }
+    // Registered once for the application lifetime; callback never accesses UI or storage.
+    let recipient = Box::new(DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS { Callback: Some(changed), Context: std::ptr::null_mut() });
+    let mut handle = std::ptr::null_mut();
+    let result = unsafe { PowerRegisterSuspendResumeNotification(DEVICE_NOTIFY_CALLBACK, (&*recipient as *const DEVICE_NOTIFY_SUBSCRIBE_PARAMETERS).cast_mut().cast(), &mut handle) };
+    if result != 0 { return Err(format!("无法监听睡眠与唤醒通知：{result}")); }
+    Box::leak(recipient);
+    Ok(())
 }
 
 fn ensure_window(app: &tauri::AppHandle, label: &str) -> Result<tauri::WebviewWindow, String> {
@@ -450,6 +537,7 @@ fn present(app: &tauri::AppHandle) -> Result<(), String> {
     let (phase, config, warning_hidden) = {
         let s = app.state::<Service>();
         let rt = s.runtime.lock().map_err(|e| e.to_string())?;
+        if rt.desktop != DesktopState::Available { drop(rt); hide_all(app); return Ok(()); }
         (rt.phase, rt.config.clone(), rt.warning_hidden)
     };
     if matches!(phase, Phase::Waiting | Phase::Disabled | Phase::Outside)
@@ -546,6 +634,8 @@ fn present(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 pub fn start(app: &tauri::AppHandle) -> Result<(), String> {
+    #[cfg(windows)]
+    watch_power()?;
     app.manage(Service {
         runtime: Mutex::new(Runtime::new(Instant::now())),
         ready: Mutex::new(HashSet::new()),
@@ -636,6 +726,7 @@ mod tests {
         let c: Config = serde_json::from_str("{}").unwrap();
         assert_eq!(c, Config::default());
         assert!(c.enabled);
+        assert!(!c.count_while_locked);
         assert_eq!(c.interval_minutes, 50);
         assert_eq!(c.duration_minutes, 5);
         assert_eq!(c.mode, "forced");
@@ -656,6 +747,155 @@ mod tests {
         let mut c = c;
         c.duration_minutes = 0;
         assert!(c.validate().is_err());
+    }
+    fn locked_tick(r: &mut Runtime, now: Instant, desktop: DesktopState, window: Option<Window>) {
+        r.last_tick = now;
+        r.advance(now, desktop, r.config.clone(), window);
+    }
+    #[test]
+    fn lock_option_preserves_deadline_and_defers_one_reminder_until_unlock() {
+        let t = Instant::now();
+        for forced in [false, true] {
+            let mut r = enabled(t, forced);
+            r.config.count_while_locked = true;
+            let window = r.window;
+            let deadline = r.deadline;
+            locked_tick(&mut r, t + Duration::from_secs(20), DesktopState::Locked, window);
+            assert_eq!(r.deadline, deadline);
+            locked_tick(&mut r, t + Duration::from_secs(40), DesktopState::Available, window);
+            assert_eq!(r.deadline, deadline);
+            locked_tick(&mut r, t + Duration::from_secs(400), DesktopState::Locked, window);
+            assert_eq!(r.phase, Phase::Waiting);
+            assert_eq!(r.deadline, deadline);
+            locked_tick(&mut r, t + Duration::from_secs(401), DesktopState::Available, window);
+            assert_eq!(r.phase, if forced { Phase::Warning } else { Phase::Prompt });
+            if forced { assert_eq!(r.deadline, t + Duration::from_secs(411)); }
+        }
+    }
+    #[test]
+    fn locking_pending_warning_or_prompt_requires_fresh_offer_on_unlock() {
+        let t = Instant::now();
+        for forced in [false, true] {
+            let mut r = enabled(t, forced);
+            r.config.count_while_locked = true;
+            r.offer(t, false);
+            r.warning_hidden = true;
+            let old_generation = r.generation;
+            let window = r.window;
+            locked_tick(&mut r, t + Duration::from_secs(3), DesktopState::Locked, window);
+            assert_eq!(r.phase, Phase::Waiting);
+            assert!(r.action("start", "rest-notice", old_generation, t).is_err());
+            locked_tick(&mut r, t + Duration::from_secs(100), DesktopState::Available, window);
+            assert!(!r.warning_hidden);
+            if forced { assert_eq!(r.deadline, t + Duration::from_secs(110)); }
+        }
+    }
+    #[test]
+    fn locked_rest_finishes_and_next_interval_starts_at_its_actual_end() {
+        let t = Instant::now();
+        let mut r = enabled(t, true);
+        r.config.count_while_locked = true;
+        r.phase(Phase::Rest, t, 300);
+        let window = r.window;
+        locked_tick(&mut r, t + Duration::from_secs(100), DesktopState::Locked, window);
+        assert_eq!(r.phase, Phase::Rest);
+        assert_eq!(r.deadline, t + Duration::from_secs(300));
+        locked_tick(&mut r, t + Duration::from_secs(310), DesktopState::Locked, window);
+        assert_eq!(r.phase, Phase::Waiting);
+        assert_eq!(r.deadline, t + Duration::from_secs(360));
+        locked_tick(&mut r, t + Duration::from_secs(350), DesktopState::Available, window);
+        assert_eq!(r.phase, Phase::Waiting);
+        assert_eq!(r.deadline, t + Duration::from_secs(360));
+    }
+    #[test]
+    fn lock_schedule_boundaries_drop_due_reminders_and_start_full_interval() {
+        let t = Instant::now();
+        let mut r = enabled(t, true);
+        r.config.count_while_locked = true;
+        r.config.schedule.enabled = true;
+        r.window = scheduled_window("2026-11-11 11:30");
+        locked_tick(&mut r, t + Duration::from_secs(500), DesktopState::Locked, None);
+        assert_eq!(r.phase, Phase::Outside);
+        let afternoon = scheduled_window("2026-11-11 13:30");
+        locked_tick(&mut r, t + Duration::from_secs(600), DesktopState::Locked, afternoon);
+        assert_eq!(r.phase, Phase::Waiting);
+        assert_eq!(r.deadline, t + Duration::from_secs(660));
+        locked_tick(&mut r, t + Duration::from_secs(610), DesktopState::Available, afternoon);
+        assert_eq!(r.deadline, t + Duration::from_secs(660));
+    }
+    #[test]
+    fn disabled_lock_option_and_secure_desktop_reset() {
+        let t = Instant::now();
+        let mut r = enabled(t, true);
+        let window = r.window;
+        locked_tick(&mut r, t + Duration::from_secs(20), DesktopState::Locked, window);
+        assert_eq!(r.deadline, t + Duration::from_secs(80));
+        r.config.count_while_locked = true;
+        locked_tick(&mut r, t + Duration::from_secs(30), DesktopState::Unavailable, window);
+        assert_eq!(r.deadline, t + Duration::from_secs(90));
+        r.config.count_while_locked = false;
+        // A suspend/resume notification resets even if the interruption is under 10s.
+        r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+        locked_tick(&mut r, t + Duration::from_secs(31), DesktopState::Available, window);
+        assert_eq!(r.deadline, t + Duration::from_secs(91));
+        r.advance(t + Duration::from_secs(100), DesktopState::Locked, r.config.clone(), window);
+        assert_eq!(r.deadline, t + Duration::from_secs(160));
+    }
+    #[test]
+    fn sleep_counts_wall_elapsed_without_double_counting_or_delivering_while_locked() {
+        let t = Instant::now();
+        let wall = SystemTime::now();
+        for monotonic_elapsed in [1, 20] {
+            let mut r = enabled(t, true);
+            r.config.count_while_locked = true;
+            r.last_wall = wall;
+            r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+            let wake = t + Duration::from_secs(monotonic_elapsed);
+            r.advance_timer_at(wake, wall + Duration::from_secs(20), DesktopState::Available, r.config.clone(), r.window, false);
+            assert_eq!(r.phase, Phase::Waiting);
+            assert_eq!(r.deadline, wake + Duration::from_secs(40));
+            r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+            r.advance_timer_at(wake + Duration::from_secs(1), wall + Duration::from_secs(200), DesktopState::Locked, r.config.clone(), r.window, false);
+            assert_eq!(r.phase, Phase::Waiting);
+            r.advance_timer_at(wake + Duration::from_secs(2), wall + Duration::from_secs(201), DesktopState::Available, r.config.clone(), r.window, false);
+            assert_eq!(r.phase, Phase::Warning);
+            assert_eq!(r.deadline, wake + Duration::from_secs(12));
+        }
+    }
+    #[test]
+    fn sleep_restarts_warning_and_drops_reminders_from_previous_period() {
+        let t = Instant::now();
+        let wall = SystemTime::now();
+        let mut r = enabled(t, true);
+        r.config.count_while_locked = true;
+        r.last_wall = wall;
+        r.offer(t, false);
+        r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+        r.advance_timer_at(t + Duration::from_secs(1), wall + Duration::from_secs(3600), DesktopState::Available, r.config.clone(), r.window, false);
+        assert_eq!(r.phase, Phase::Warning);
+        assert_eq!(r.deadline, t + Duration::from_secs(11));
+        r.window = scheduled_window("2026-11-11 10:00");
+        r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+        r.advance_timer_at(t + Duration::from_secs(2), wall + Duration::from_secs(7200), DesktopState::Available, r.config.clone(), None, false);
+        assert_eq!(r.phase, Phase::Outside);
+        r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+        r.advance_timer_at(t + Duration::from_secs(3), wall + Duration::from_secs(14400), DesktopState::Available, r.config.clone(), scheduled_window("2026-11-11 14:00"), false);
+        assert_eq!(r.phase, Phase::Waiting);
+        assert_eq!(r.deadline, t + Duration::from_secs(63));
+    }
+    #[test]
+    fn sleep_finishes_active_rest_and_preserves_next_interval_remaining() {
+        let t = Instant::now();
+        let wall = SystemTime::now();
+        let mut r = enabled(t, true);
+        r.config.count_while_locked = true;
+        r.last_wall = wall;
+        r.phase(Phase::Rest, t, 300);
+        r.power_epoch = POWER_EPOCH.load(Ordering::Relaxed).wrapping_sub(1);
+        let wake = t + Duration::from_secs(1);
+        r.advance_timer_at(wake, wall + Duration::from_secs(320), DesktopState::Available, r.config.clone(), r.window, false);
+        assert_eq!(r.phase, Phase::Waiting);
+        assert_eq!(r.deadline, wake + Duration::from_secs(40));
     }
     fn scheduled_window(time: &str) -> Option<Window> {
         Schedule::default().window_at(

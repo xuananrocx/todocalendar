@@ -20,7 +20,7 @@ const ReminderSettings = {
     const time = (key, label) => row(label, `<input aria-label="${label}" data-reminder="${key}" type="time" required value="${esc(r[key] || '09:30')}">`);
     const group = (title, body) => `<div class="settings-group"><div class="settings-section-title">${title}</div>${body}</div>`;
     return (embedded ? '' : '<div class="settings-content-title">提醒</div>') + `<div class="settings-content-desc">仅在应用运行时提醒；启动后汇总未处理的过期事项，搁置待办不参与。</div>`
-      + group('提醒方式', check('enabled','启用待办提醒') + select('scope','提醒范围',[['both','开始与截止'],['start','仅开始'],['end','仅截止']]) + check('popup','倒计时弹窗') + check('system','Windows 系统通知') + check('topmost','提醒弹窗置顶'))
+      + group('提醒方式', check('enabled','启用待办提醒') + select('scope','提醒范围',[['both','开始与截止'],['start','仅开始'],['end','仅截止']]) + (r.enabled && r.scope !== 'end' ? check('newTodoStartReminder','新建补发开始提醒').replace('<label>', '<div class="rest-setting-label reminder-start-label"><span>').replace('</label>', '</span>' + '<button type="button" class="rest-help-button" id="newTodoStartHelp" aria-label="新建补发开始提醒说明" aria-expanded="false">?</button></div>') : '') + check('popup','倒计时弹窗') + check('system','Windows 系统通知') + check('topmost','提醒弹窗置顶'))
       + group('参与提醒的分组', row('提醒分组', `<button type="button" class="cs-toggle reminder-group-toggle" id="reminderGroups" aria-haspopup="dialog" aria-expanded="false"><span>${esc(this.groupSummary(this.groupOptions(r, groups, settings)))}</span><span aria-hidden="true">⌄</span></button>`)
         + check('newGroupEnabled','新建分组默认提醒')
         + '<div class="settings-row settings-data-copy">新建分组默认值只影响以后新增的分组。关闭分组会暂停该组的开始、截止、弹窗、系统通知及声音；重新开启后补提醒尚未处理的到期事项。</div>'
@@ -52,6 +52,20 @@ const ReminderSettings = {
         content.querySelector(`[data-reminder-switch="${button.dataset.reminderSwitch}"]`)?.focus({ preventScroll: true });
       };
     });
+    const help = content.querySelector('#newTodoStartHelp');
+    if (help) {
+      const show = () => {
+        if (AppPopover.current?.owner === help) return;
+        const panel = document.createElement('div');
+        panel.className = 'app-popover app-help-popover'; panel.id = 'newTodoStartTip';
+        panel.setAttribute('role', 'tooltip');
+        panel.textContent = '开启后，新建待办时会补发已到时间的开始提醒。关闭后，仅保留尚未到时间的开始提醒，截止提醒不受影响。';
+        AppPopover.show(help, panel, help, () => { help.setAttribute('aria-expanded', 'false'); help.removeAttribute('aria-describedby'); });
+        help.setAttribute('aria-expanded', 'true'); help.setAttribute('aria-describedby', panel.id);
+      };
+      help.onclick = () => AppPopover.current?.owner === help ? AppPopover.close(true) : show();
+      help.onmouseenter = show; help.onfocus = show;
+    }
     this.bindGroups(main, content);
     content.querySelector('#reminderSoundPreview').onclick = async () => {
       try { await window.__TAURI__.core.invoke('reminder_sound_preview'); }
